@@ -1,0 +1,51 @@
+# Scaffold — Cursor Rules
+
+## Ambiguity protocol
+If you encounter a decision not covered by the active milestone:
+- If a safe assumption exists, make it, record it under ## Assumptions Made in the milestone doc, and continue.
+- If no safe assumption exists, stop. Add the question to ## Open Questions. Do not guess. Do not proceed.
+
+## Layer separation — non-negotiable
+- Components never call Supabase directly.
+- Components never contain business logic.
+- All Supabase queries live in /lib/data only.
+- All business logic lives in /lib/services only.
+- API routes are thin: parse request → call service → return response.
+- The Anthropic API is called from API routes only. Never from components. Never from hooks.
+
+## Code structure
+- No inline functions. All functions declared externally and named.
+- Keep pages small. Extract blocks into named components.
+- Human-readable code. A developer should be able to make a small change without asking the AI.
+- Comments explain intent, not mechanics. Why, not what.
+
+## DRY
+- Abstract when the same logic appears in 3+ places. Not 2.
+
+## TypeScript
+- Strict mode. No `any`. No type assertions unless genuinely unavoidable — comment why.
+
+## Components
+- Shadcn for composition primitives.
+- Tailwind for layout and spacing. Not mandated for everything.
+- No inline styles.
+
+## Testing
+- Test critical paths only at V1: domain logic, data transforms, API routes.
+- Skip UI component tests at MVP.
+- Test anything that would fail silently if broken.
+
+## Security
+- ANTHROPIC_API_KEY is server-side only. Never in a NEXT_PUBLIC_ variable. Never referenced in any client file.
+- All Supabase queries go through RLS. Never use the service role key client-side.
+
+## Pacing
+- Do not attempt to build an entire milestone in one pass.
+- Build one section at a time in the order listed in the milestone doc.
+- After completing each section, stop and confirm before continuing to the next.
+- If a section produces open questions, stop there — do not skip ahead.
+
+## What not to do
+- Do not install libraries not already in the stack without flagging it as an Open Question.
+- Do not create files outside the defined folder structure without flagging it.
+- Do not combine layers (e.g. fetching in a component "just this once").
