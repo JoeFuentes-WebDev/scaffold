@@ -50,3 +50,49 @@ export interface CreateProjectInput {
   description: string;
   project_type?: ProjectType;
 }
+
+export interface RoundQuestion {
+  id: string;
+  text: string;
+  answer?: string;
+  follow_up?: boolean;
+}
+
+export interface Round {
+  id: string;
+  project_id: string;
+  domain_name: string;
+  round_number: number;
+  status: RoundStatus;
+  questions: RoundQuestion[];
+  domains_affected: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRoundInput {
+  project_id: string;
+  domain_name: string;
+  round_number: number;
+  status?: RoundStatus;
+  questions: RoundQuestion[];
+  domains_affected?: string[];
+}
+
+export interface EvaluateAnswerInput {
+  question_id: string;
+  answer: string;
+}
+
+export interface ClaudeEvaluateResponse {
+  action: "follow_up" | "advance";
+  follow_up_questions?: RoundQuestion[];
+  domains_affected: string[];
+  domain_updates: Record<string, Record<string, unknown>>;
+}
+
+export interface EvaluateResult {
+  action: "follow_up" | "advance";
+  round: Round | null;
+  domains_affected: string[];
+}

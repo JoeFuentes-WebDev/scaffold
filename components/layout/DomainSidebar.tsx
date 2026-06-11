@@ -51,6 +51,7 @@ export function DomainTabItem({
 interface DomainSidebarProps {
   domains: Domain[];
   activeTab: DomainName | "documents";
+  documentsStatus: DomainStatus;
   onTabSelect: (tab: DomainName | "documents") => void;
 }
 
@@ -65,6 +66,7 @@ function getDomainStatus(
 export function DomainSidebar({
   domains,
   activeTab,
+  documentsStatus,
   onTabSelect,
 }: DomainSidebarProps) {
   return (
@@ -86,7 +88,7 @@ export function DomainSidebar({
           isActive={activeTab === "documents"}
           label="Documents"
           onSelect={onTabSelect}
-          status="available"
+          status={documentsStatus}
         />
       </nav>
     </aside>

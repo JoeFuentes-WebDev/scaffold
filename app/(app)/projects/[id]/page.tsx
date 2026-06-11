@@ -31,6 +31,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   return (
     <ProjectShell
       domains={result.domains}
+      projectId={result.project.id}
       projectName={result.project.name}
       userAvatarUrl={userMetadata.avatar_url}
       userEmail={user.email}

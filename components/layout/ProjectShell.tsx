@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/layout/AppHeader";
 import { DomainSidebar } from "@/components/layout/DomainSidebar";
+import { DomainWorkspace } from "@/components/project/DomainWorkspace";
 import { DOMAIN_DEFINITIONS } from "@/constants/domains";
-import type { Domain, DomainName } from "@/lib/types";
+import { getDocumentsTabStatus } from "@/lib/documents/status";
+import type { Domain, DomainName, DomainStatus } from "@/lib/types";
 
 interface ProjectShellProps {
+  projectId: string;
   projectName: string;
   domains: Domain[];
   userEmail?: string;
@@ -25,16 +29,76 @@ function getTabLabel(activeTab: ActiveTab): string {
   return domain?.label ?? activeTab;
 }
 
+function getActiveDomain(
+  domains: Domain[],
+  activeTab: ActiveTab
+): Domain | null {
+  if (activeTab === "documents") {
+    return null;
+  }
+
+  return domains.find((domain) => domain.name === activeTab) ?? null;
+}
+
+function renderDocumentsContent(documentsStatus: DomainStatus): React.ReactNode {
+  if (documentsStatus === "locked") {
+    return (
+      <p className="text-sm text-[#6B7280]">
+        Documents are locked until at least one artifact&apos;s required domains
+        are complete.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-sm text-[#6B7280]">
+      Artifact generation will be available in Milestone 3.
+    </p>
+  );
+}
+
 export function ProjectShell({
+  projectId,
   projectName,
-  domains,
+  domains: initialDomains,
   userEmail,
   userAvatarUrl,
 }: ProjectShellProps) {
+  const router = useRouter();
+  const [domains, setDomains] = useState(initialDomains);
   const [activeTab, setActiveTab] = useState<ActiveTab>("product");
+
+  useEffect(() => {
+    setDomains(initialDomains);
+  }, [initialDomains]);
+
+  const documentsStatus = getDocumentsTabStatus(domains);
+  const activeDomain = getActiveDomain(domains, activeTab);
 
   function handleTabSelect(tab: ActiveTab) {
     setActiveTab(tab);
+  }
+
+  function handleRefresh() {
+    router.refresh();
+  }
+
+  function renderMainContent() {
+    if (activeTab === "documents") {
+      return renderDocumentsContent(documentsStatus);
+    }
+
+    if (!activeDomain) {
+      return null;
+    }
+
+    return (
+      <DomainWorkspace
+        domain={activeDomain}
+        onRefresh={handleRefresh}
+        projectId={projectId}
+      />
+    );
   }
 
   return (
@@ -47,6 +111,7 @@ export function ProjectShell({
       <div className="flex flex-1">
         <DomainSidebar
           activeTab={activeTab}
+          documentsStatus={documentsStatus}
           domains={domains}
           onTabSelect={handleTabSelect}
         />
@@ -55,9 +120,7 @@ export function ProjectShell({
             <h2 className="text-xl font-semibold text-[#111827]">
               {getTabLabel(activeTab)}
             </h2>
-            <p className="mt-2 text-sm text-[#6B7280]">
-              Domain content will be built in Milestone 2.
-            </p>
+            <div className="mt-4">{renderMainContent()}</div>
           </div>
         </main>
       </div>
