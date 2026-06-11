@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { DomainSidebar } from "@/components/layout/DomainSidebar";
 import { DomainWorkspace } from "@/components/project/DomainWorkspace";
+import { DocumentsWorkspace } from "@/components/artifacts/DocumentsWorkspace";
 import { DOMAIN_DEFINITIONS } from "@/constants/domains";
 import { getDocumentsTabStatus } from "@/lib/documents/status";
 import type { Domain, DomainName, DomainStatus } from "@/lib/types";
@@ -41,7 +42,11 @@ function getActiveDomain(
   return domains.find((domain) => domain.name === activeTab) ?? null;
 }
 
-function renderDocumentsContent(documentsStatus: DomainStatus): React.ReactNode {
+function renderDocumentsContent(
+  documentsStatus: DomainStatus,
+  projectId: string,
+  domains: Domain[]
+): React.ReactNode {
   if (documentsStatus === "locked") {
     return (
       <p className="text-sm text-[#6B7280]">
@@ -51,11 +56,7 @@ function renderDocumentsContent(documentsStatus: DomainStatus): React.ReactNode 
     );
   }
 
-  return (
-    <p className="text-sm text-[#6B7280]">
-      Artifact generation will be available in Milestone 3.
-    </p>
-  );
+  return <DocumentsWorkspace domains={domains} projectId={projectId} />;
 }
 
 export function ProjectShell({
@@ -87,7 +88,7 @@ export function ProjectShell({
 
   function renderMainContent() {
     if (activeTab === "documents") {
-      return renderDocumentsContent(documentsStatus);
+      return renderDocumentsContent(documentsStatus, projectId, domains);
     }
 
     if (!activeDomain) {

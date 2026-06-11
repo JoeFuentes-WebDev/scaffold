@@ -22,7 +22,23 @@ export type ArtifactType =
   | "review"
   | "env_manifest";
 
-export type ArtifactStatus = "pending" | "generated";
+export type ArtifactStatus = "pending" | "generated" | "partial";
+
+export interface Artifact {
+  id: string;
+  project_id: string;
+  artifact_type: ArtifactType;
+  content: string | null;
+  status: ArtifactStatus;
+  sequence_number: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GenerateArtifactInput {
+  project_id: string;
+  artifact_type: ArtifactType;
+}
 
 export interface Project {
   id: string;

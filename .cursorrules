@@ -49,3 +49,8 @@ If you encounter a decision not covered by the active milestone:
 - Do not install libraries not already in the stack without flagging it as an Open Question.
 - Do not create files outside the defined folder structure without flagging it.
 - Do not combine layers (e.g. fetching in a component "just this once").
+
+## Manual steps
+After any migration file is generated, stop and explicitly surface it as:
+"MANUAL STEP REQUIRED: run `npx supabase db push` before testing."
+Put it at the top of the completion summary, not the bottom.

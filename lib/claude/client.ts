@@ -32,7 +32,7 @@ export async function callClaude(
 
   const message = await anthropic.messages.create({
     model: CLAUDE_MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
@@ -44,4 +44,46 @@ export async function callClaude(
   }
 
   return textBlock.text;
+}
+
+export async function streamClaude(
+  systemPrompt: string,
+  userPrompt: string,
+  onChunk: (chunk: string) => void
+): Promise<{ text: string; completed: boolean }> {
+  const anthropic = getAnthropicClient();
+  let fullText = "";
+
+  const messageStream = anthropic.messages.stream({
+    model: CLAUDE_MODEL,
+    max_tokens: 8192,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  try {
+    for await (const event of messageStream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        fullText += event.delta.text;
+        onChunk(event.delta.text);
+      }
+    }
+
+    await messageStream.finalMessage();
+
+    if (!fullText.trim()) {
+      throw new Error("Claude returned an empty response");
+    }
+
+    return { text: fullText, completed: true };
+  } catch (error) {
+    if (fullText.trim()) {
+      return { text: fullText, completed: false };
+    }
+
+    throw error;
+  }
 }
