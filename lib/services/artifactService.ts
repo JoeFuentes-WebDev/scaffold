@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  getNextMilestoneSequenceNumber,
+  hasGeneratedMilestone,
+} from "@/lib/artifacts/naming";
 import { streamClaude } from "@/lib/claude/client";
 import { getArtifactByType, getArtifactsForProject, upsertArtifact } from "@/lib/data/artifacts";
 import { getMissingDomainsForArtifact } from "@/lib/documents/thresholds";
@@ -20,7 +24,13 @@ import {
   buildReviewUserPrompt,
 } from "@/lib/prompts/artifacts/review";
 import { assembleProjectModel } from "@/lib/services/projectModelService";
-import type { Artifact, ArtifactType, DomainName } from "@/lib/types";
+import type {
+  Artifact,
+  ArtifactType,
+  DomainName,
+  MilestoneReviewContext,
+  StreamArtifactOptions,
+} from "@/lib/types";
 
 interface PromptPair {
   systemPrompt: string;
@@ -38,29 +48,29 @@ export interface StreamArtifactResult {
   isPartial: boolean;
 }
 
-function getSequenceNumber(
-  artifactType: ArtifactType,
+function resolveMilestoneSequenceNumber(
   existingArtifact: Artifact | null,
-  milestoneSequence: number
+  options?: StreamArtifactOptions
 ): number {
-  if (artifactType === "milestone") {
-    if (existingArtifact?.sequence_number) {
-      return existingArtifact.sequence_number;
-    }
-
-    return milestoneSequence;
+  if (options?.nextMilestone && hasGeneratedMilestone(existingArtifact)) {
+    return getNextMilestoneSequenceNumber(existingArtifact);
   }
 
-  if (artifactType === "review") {
-    return milestoneSequence;
+  if (options?.regenerate && existingArtifact?.sequence_number) {
+    return existingArtifact.sequence_number;
+  }
+
+  if (existingArtifact?.sequence_number) {
+    return existingArtifact.sequence_number;
   }
 
   return 1;
 }
 
-async function getMilestoneSequenceNumber(
+async function getReviewSequenceNumber(
   supabase: SupabaseClient,
-  projectId: string
+  projectId: string,
+  options?: StreamArtifactOptions
 ): Promise<number> {
   const milestoneArtifact = await getArtifactByType(
     supabase,
@@ -68,8 +78,29 @@ async function getMilestoneSequenceNumber(
     "milestone"
   );
 
+  if (options?.nextMilestone && hasGeneratedMilestone(milestoneArtifact)) {
+    return getNextMilestoneSequenceNumber(milestoneArtifact);
+  }
+
   if (milestoneArtifact?.sequence_number) {
     return milestoneArtifact.sequence_number;
+  }
+
+  return 1;
+}
+
+function resolveSequenceNumber(
+  artifactType: ArtifactType,
+  existingArtifact: Artifact | null,
+  reviewSequence: number,
+  options?: StreamArtifactOptions
+): number {
+  if (artifactType === "milestone") {
+    return resolveMilestoneSequenceNumber(existingArtifact, options);
+  }
+
+  if (artifactType === "review") {
+    return reviewSequence;
   }
 
   return 1;
@@ -79,7 +110,8 @@ async function buildPromptsForArtifact(
   supabase: SupabaseClient,
   projectId: string,
   artifactType: ArtifactType,
-  sequenceNumber: number
+  sequenceNumber: number,
+  reviewContext?: MilestoneReviewContext
 ): Promise<PromptPair> {
   const model = await assembleProjectModel(supabase, projectId);
 
@@ -93,7 +125,11 @@ async function buildPromptsForArtifact(
   if (artifactType === "milestone") {
     return {
       systemPrompt: buildMilestoneSystemPrompt(),
-      userPrompt: buildMilestoneUserPrompt(model, sequenceNumber),
+      userPrompt: buildMilestoneUserPrompt(
+        model,
+        sequenceNumber,
+        reviewContext
+      ),
     };
   }
 
@@ -138,7 +174,8 @@ export async function streamArtifactGeneration(
   supabase: SupabaseClient,
   projectId: string,
   artifactType: ArtifactType,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  options?: StreamArtifactOptions
 ): Promise<StreamArtifactResult> {
   const validation = await validateArtifactGeneration(
     supabase,
@@ -157,20 +194,23 @@ export async function streamArtifactGeneration(
     projectId,
     artifactType
   );
-  const milestoneSequence = await getMilestoneSequenceNumber(
+  const reviewSequence = await getReviewSequenceNumber(
     supabase,
-    projectId
+    projectId,
+    options
   );
-  const sequenceNumber = getSequenceNumber(
+  const sequenceNumber = resolveSequenceNumber(
     artifactType,
     existingArtifact,
-    milestoneSequence
+    reviewSequence,
+    options
   );
   const prompts = await buildPromptsForArtifact(
     supabase,
     projectId,
     artifactType,
-    sequenceNumber
+    sequenceNumber,
+    options?.reviewContext
   );
 
   let content = "";
@@ -186,7 +226,13 @@ export async function streamArtifactGeneration(
     content = streamResult.text;
     isPartial = !streamResult.completed;
   } catch (error) {
-    if (existingArtifact?.content) {
+    if (existingArtifact?.content && options?.regenerate) {
+      throw new Error(
+        "Something went wrong generating this artifact. Please try again."
+      );
+    }
+
+    if (existingArtifact?.content && !options?.nextMilestone) {
       throw new Error(
         "Something went wrong generating this artifact. Please try again."
       );
@@ -208,3 +254,11 @@ export async function streamArtifactGeneration(
 
   return { content, artifact, isPartial };
 }
+
+export {
+  getArtifactNaming,
+  getMilestoneRowNaming,
+  getNextMilestoneNaming,
+  getReviewNamingForMilestone,
+  hasGeneratedMilestone,
+} from "@/lib/artifacts/naming";

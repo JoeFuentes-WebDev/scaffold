@@ -1,6 +1,7 @@
-import type { ProjectModel } from "@/lib/types";
-
 import { buildProjectModelUserMessage } from "@/lib/prompts/projectModel";
+import type { MilestoneReviewContext, ProjectModel } from "@/lib/types";
+
+export type { MilestoneReviewContext };
 
 export function buildMilestoneSystemPrompt(): string {
   return `You are generating a MILESTONE_XX.md file for a software project.
@@ -36,9 +37,25 @@ Return only the markdown content.`;
 
 export function buildMilestoneUserPrompt(
   model: ProjectModel,
-  milestoneNumber: number
+  milestoneNumber: number,
+  reviewContext?: MilestoneReviewContext
 ): string {
-  return `${buildProjectModelUserMessage(model)}
+  const reviewSection = reviewContext
+    ? `Previous milestone review:
+${reviewContext.completedReview}
+
+Open questions resolved:
+${reviewContext.openQuestionAnswers
+  .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
+  .join("\n\n")}
+
+`
+    : "";
+
+  return `${reviewSection}${buildProjectModelUserMessage(model)}
 
 Current milestone number: ${milestoneNumber}`;
 }
+
+/** @deprecated Use buildMilestoneUserPrompt */
+export const buildMilestonePrompt = buildMilestoneUserPrompt;

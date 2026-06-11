@@ -132,7 +132,14 @@ After any migration file is generated, surface it explicitly at the TOP of the c
 
 ## Assumptions Made
 
-_(Cursor fills this in as it builds)_
+- Replaced `ArtifactCard` (2×2 grid) with `ArtifactRow` (full-width collapsible rows). One row expanded at a time.
+- Display names and download filenames computed in `lib/artifacts/naming.ts` and passed to rows as props — not derived in components.
+- Next milestone generation increments `sequence_number` via `next_milestone: true` API flag; regenerate keeps the same sequence.
+- REVIEW row display name tracks the current milestone `sequence_number` (REVIEW_01 when milestone is 01).
+- Review gate state is UI-only (resets on navigation). Gate appears via "Generate MILESTONE_XX" button after first milestone exists.
+- Review markdown parser looks for `## Open Questions` and `## Manual Steps` list items.
+- `QuestionRound` reused for open-questions step with a no-op regenerate handler.
+- No DB migration required for this milestone.
 
 ## Open Questions
 

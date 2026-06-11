@@ -4,7 +4,7 @@ import {
   validateArtifactGeneration,
 } from "@/lib/services/artifactService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
-import type { ArtifactType } from "@/lib/types";
+import type { ArtifactType, MilestoneReviewContext } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 const VALID_ARTIFACT_TYPES: ArtifactType[] = [
@@ -21,6 +21,12 @@ function isValidArtifactType(value: string): value is ArtifactType {
 interface GenerateArtifactBody {
   project_id?: string;
   artifact_type?: string;
+  regenerate?: boolean;
+  next_milestone?: boolean;
+  review_context?: {
+    completed_review?: string;
+    open_question_answers?: { question?: string; answer?: string }[];
+  };
 }
 
 function validateGenerateBody(body: GenerateArtifactBody): string | null {
@@ -37,6 +43,26 @@ function validateGenerateBody(body: GenerateArtifactBody): string | null {
   }
 
   return null;
+}
+
+function parseReviewContext(
+  body: GenerateArtifactBody
+): MilestoneReviewContext | undefined {
+  if (!body.review_context?.completed_review?.trim()) {
+    return undefined;
+  }
+
+  const openQuestionAnswers = (body.review_context.open_question_answers ?? [])
+    .filter((item) => item.question?.trim() && item.answer?.trim())
+    .map((item) => ({
+      question: item.question!.trim(),
+      answer: item.answer!.trim(),
+    }));
+
+  return {
+    completedReview: body.review_context.completed_review.trim(),
+    openQuestionAnswers,
+  };
 }
 
 export async function POST(request: Request) {
@@ -82,6 +108,7 @@ export async function POST(request: Request) {
   }
 
   const encoder = new TextEncoder();
+  const reviewContext = parseReviewContext(body);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -92,6 +119,11 @@ export async function POST(request: Request) {
           artifactType,
           (chunk) => {
             controller.enqueue(encoder.encode(chunk));
+          },
+          {
+            regenerate: body.regenerate === true,
+            nextMilestone: body.next_milestone === true,
+            reviewContext,
           }
         );
         controller.close();

@@ -3,18 +3,39 @@
 import JSZip from "jszip";
 import { useEffect, useState } from "react";
 
-import { ArtifactCard } from "@/components/artifacts/ArtifactCard";
-import { ArtifactPreview } from "@/components/artifacts/ArtifactPreview";
+import { ArtifactRow } from "@/components/artifacts/ArtifactRow";
+import {
+  ReviewGate,
+  type ReviewGateResult,
+} from "@/components/artifacts/ReviewGate";
 import { Button } from "@/components/ui/button";
 import {
   ARTIFACT_DEFINITIONS,
   getArtifactFilename,
 } from "@/constants/artifacts";
+import {
+  getArtifactNaming,
+  getMilestoneRowNaming,
+  getNextMilestoneNaming,
+  getReviewNamingForMilestone,
+  hasGeneratedMilestone,
+} from "@/lib/artifacts/naming";
+import {
+  formatDomainList,
+  getMissingDomainsForArtifact,
+  isArtifactReady,
+} from "@/lib/documents/thresholds";
 import type { Artifact, ArtifactType, Domain } from "@/lib/types";
 
 interface DocumentsWorkspaceProps {
   projectId: string;
   domains: Domain[];
+}
+
+interface GenerateOptions {
+  regenerate?: boolean;
+  nextMilestone?: boolean;
+  reviewContext?: ReviewGateResult;
 }
 
 function downloadMarkdownFile(filename: string, content: string): void {
@@ -34,18 +55,31 @@ function getArtifactForType(
   return artifacts.find((item) => item.artifact_type === artifactType) ?? null;
 }
 
+function hasGeneratedContent(artifact: Artifact | null): boolean {
+  return Boolean(
+    artifact?.content &&
+      (artifact.status === "generated" || artifact.status === "partial")
+  );
+}
+
 export function DocumentsWorkspace({
   projectId,
   domains,
 }: DocumentsWorkspaceProps) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [expandedType, setExpandedType] = useState<ArtifactType | null>(null);
   const [generatingType, setGeneratingType] = useState<ArtifactType | null>(
     null
   );
-  const [previewType, setPreviewType] = useState<ArtifactType | null>(null);
   const [streamingContent, setStreamingContent] = useState("");
+  const [showReviewGate, setShowReviewGate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+
+  const milestoneArtifact = getArtifactForType(artifacts, "milestone");
+  const milestoneNaming = getMilestoneRowNaming(milestoneArtifact);
+  const nextMilestoneNaming = getNextMilestoneNaming(milestoneArtifact);
+  const reviewNaming = getReviewNamingForMilestone(milestoneArtifact);
 
   async function loadArtifacts() {
     const params = new URLSearchParams({ project_id: projectId });
@@ -67,38 +101,85 @@ export function DocumentsWorkspace({
     void loadArtifacts();
   }, [projectId]);
 
-  const generatedArtifacts = artifacts.filter(
-    (artifact) =>
-      artifact.content &&
-      (artifact.status === "generated" || artifact.status === "partial")
+  const generatedArtifacts = artifacts.filter((artifact) =>
+    hasGeneratedContent(artifact)
   );
 
-  async function handleGenerate(artifactType: ArtifactType) {
+  function getRowNaming(artifactType: ArtifactType) {
+    if (artifactType === "milestone") {
+      return milestoneNaming;
+    }
+
+    if (artifactType === "review") {
+      return reviewNaming;
+    }
+
+    return getArtifactNaming(artifactType, 1);
+  }
+
+  function getPreviewContent(artifactType: ArtifactType): string {
+    if (generatingType === artifactType) {
+      return streamingContent;
+    }
+
+    const artifact = getArtifactForType(artifacts, artifactType);
+    return artifact?.content ?? "";
+  }
+
+  function handleToggleExpand(artifactType: ArtifactType) {
+    if (expandedType === artifactType) {
+      setExpandedType(null);
+      return;
+    }
+
+    setExpandedType(artifactType);
+  }
+
+  async function handleGenerate(
+    artifactType: ArtifactType,
+    options?: GenerateOptions
+  ) {
     setError(null);
     setGeneratingType(artifactType);
-    setPreviewType(artifactType);
+    setExpandedType(artifactType);
     setStreamingContent("");
+    setShowReviewGate(false);
+
+    const body: Record<string, unknown> = {
+      project_id: projectId,
+      artifact_type: artifactType,
+    };
+
+    if (options?.regenerate) {
+      body.regenerate = true;
+    }
+
+    if (options?.nextMilestone) {
+      body.next_milestone = true;
+    }
+
+    if (options?.reviewContext && !options.reviewContext.skippedReview) {
+      body.review_context = {
+        completed_review: options.reviewContext.completedReview,
+        open_question_answers: options.reviewContext.openQuestionAnswers,
+      };
+    }
 
     try {
       const response = await fetch("/api/artifacts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          project_id: projectId,
-          artifact_type: artifactType,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const data = (await response.json()) as { error?: string };
         setError(data.error ?? "Failed to generate artifact");
-        setPreviewType(null);
         return;
       }
 
       if (!response.body) {
         setError("Failed to generate artifact");
-        setPreviewType(null);
         return;
       }
 
@@ -120,31 +201,21 @@ export function DocumentsWorkspace({
       await loadArtifacts();
     } catch {
       setError("Failed to generate artifact");
-      setPreviewType(null);
     } finally {
       setGeneratingType(null);
     }
   }
 
-  function handleClosePreview() {
-    setPreviewType(null);
-    setStreamingContent("");
-  }
-
   function handleDownload(artifactType: ArtifactType) {
     const artifact = getArtifactForType(artifacts, artifactType);
-    const content =
-      previewType === artifactType && streamingContent
-        ? streamingContent
-        : artifact?.content;
+    const naming = getRowNaming(artifactType);
+    const content = getPreviewContent(artifactType);
 
     if (!content) {
       return;
     }
 
-    const sequenceNumber = artifact?.sequence_number ?? 1;
-    const filename = getArtifactFilename(artifactType, sequenceNumber);
-    downloadMarkdownFile(filename, content);
+    downloadMarkdownFile(naming.filename, content);
   }
 
   async function handleDownloadAll() {
@@ -180,29 +251,111 @@ export function DocumentsWorkspace({
     }
   }
 
-  function renderPreview(artifactType: ArtifactType) {
-    if (previewType !== artifactType) {
+  function handleStartReviewGate() {
+    setShowReviewGate(true);
+    setExpandedType("milestone");
+  }
+
+  function handleCancelReviewGate() {
+    setShowReviewGate(false);
+  }
+
+  function handleReviewGateComplete(result: ReviewGateResult) {
+    void handleGenerate("milestone", {
+      nextMilestone: true,
+      reviewContext: result,
+    });
+  }
+
+  function getGenerateHandler(artifactType: ArtifactType) {
+    return function triggerGenerate() {
+      void handleGenerate(artifactType);
+    };
+  }
+
+  function getRegenerateHandler(artifactType: ArtifactType) {
+    return function triggerRegenerate() {
+      void handleGenerate(artifactType, { regenerate: true });
+    };
+  }
+
+  function renderReviewGate() {
+    if (!showReviewGate) {
       return null;
     }
 
-    const artifact = getArtifactForType(artifacts, artifactType);
-    const content =
-      streamingContent || artifact?.content || "";
-    const sequenceNumber = artifact?.sequence_number ?? 1;
-    const isStreaming = generatingType === artifactType;
+    return (
+      <ReviewGate
+        nextMilestoneLabel={nextMilestoneNaming.displayName}
+        onCancel={handleCancelReviewGate}
+        onComplete={handleReviewGateComplete}
+        reviewSequenceNumber={milestoneNaming.sequenceNumber}
+      />
+    );
+  }
+
+  function renderNextMilestoneButton() {
+    if (!hasGeneratedMilestone(milestoneArtifact)) {
+      return null;
+    }
+
+    if (!isArtifactReady(domains, "milestone")) {
+      return null;
+    }
 
     return (
-      <ArtifactPreview
-        artifactType={artifactType}
-        content={content}
-        isPartial={artifact?.status === "partial"}
-        isRegenerating={generatingType === artifactType}
-        isStreaming={isStreaming}
-        onClose={handleClosePreview}
-        onDownload={() => handleDownload(artifactType)}
-        onRegenerate={() => handleGenerate(artifactType)}
-        sequenceNumber={sequenceNumber}
-      />
+      <Button
+        disabled={generatingType === "milestone" || showReviewGate}
+        onClick={handleStartReviewGate}
+        size="sm"
+        type="button"
+        variant="secondary"
+      >
+        Generate {nextMilestoneNaming.displayName}
+      </Button>
+    );
+  }
+
+  function renderArtifactRow(definition: (typeof ARTIFACT_DEFINITIONS)[number]) {
+    const artifactType = definition.type;
+    const artifact = getArtifactForType(artifacts, artifactType);
+    const naming = getRowNaming(artifactType);
+    const isReady = isArtifactReady(domains, artifactType);
+    const missingLabel = formatDomainList(
+      getMissingDomainsForArtifact(domains, artifactType)
+    );
+    const generated = hasGeneratedContent(artifact);
+    const generateLabel =
+      artifactType === "milestone" && !generated
+        ? `Generate ${naming.displayName}`
+        : "Generate";
+
+    return (
+      <div className="space-y-2" key={artifactType}>
+        <ArtifactRow
+          description={definition.description}
+          displayName={naming.displayName}
+          gateContent={
+            artifactType === "milestone" ? renderReviewGate() : undefined
+          }
+          generateLabel={generateLabel}
+          hasGeneratedContent={generated}
+          isExpanded={expandedType === artifactType}
+          isGenerating={generatingType === artifactType}
+          isPartial={artifact?.status === "partial"}
+          isReady={isReady}
+          isStreaming={generatingType === artifactType}
+          missingLabel={missingLabel}
+          onDownload={() => handleDownload(artifactType)}
+          onGenerate={getGenerateHandler(artifactType)}
+          onRegenerate={getRegenerateHandler(artifactType)}
+          onToggleExpand={() => handleToggleExpand(artifactType)}
+          previewContent={getPreviewContent(artifactType)}
+        />
+        {artifactType === "milestone" ? (
+          <div className="flex justify-end">{renderNextMilestoneButton()}</div>
+        ) : null}
+      </div>
     );
   }
 
@@ -224,19 +377,10 @@ export function DocumentsWorkspace({
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {ARTIFACT_DEFINITIONS.map((definition) => (
-          <div key={definition.type}>
-            <ArtifactCard
-              artifact={getArtifactForType(artifacts, definition.type)}
-              definition={definition}
-              domains={domains}
-              isGenerating={generatingType === definition.type}
-              onGenerate={() => handleGenerate(definition.type)}
-            />
-            {renderPreview(definition.type)}
-          </div>
-        ))}
+      <div className="flex flex-col gap-4">
+        {ARTIFACT_DEFINITIONS.map((definition) =>
+          renderArtifactRow(definition)
+        )}
       </div>
     </div>
   );

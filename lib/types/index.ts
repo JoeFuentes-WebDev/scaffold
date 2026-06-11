@@ -40,6 +40,17 @@ export interface GenerateArtifactInput {
   artifact_type: ArtifactType;
 }
 
+export interface MilestoneReviewContext {
+  completedReview: string;
+  openQuestionAnswers: { question: string; answer: string }[];
+}
+
+export interface StreamArtifactOptions {
+  regenerate?: boolean;
+  nextMilestone?: boolean;
+  reviewContext?: MilestoneReviewContext;
+}
+
 export interface Project {
   id: string;
   user_id: string;
