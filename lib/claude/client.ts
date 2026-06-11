@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const CLAUDE_MODEL = "claude-sonnet-4-6";
-
+// update model to 4.6
 function getAnthropicClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
