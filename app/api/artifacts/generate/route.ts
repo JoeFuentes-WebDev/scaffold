@@ -4,64 +4,21 @@ import {
   validateArtifactGeneration,
 } from "@/lib/services/artifactService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
-import type { ArtifactType, MilestoneReviewContext } from "@/lib/types";
+import type { MilestoneReviewContext } from "@/lib/types";
+import {
+  GenerateArtifactSchema,
+  invalidRequestResponse,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
 
-const VALID_ARTIFACT_TYPES: ArtifactType[] = [
-  "onboarding",
-  "milestone",
-  "review",
-  "env_manifest",
-];
-
-function isValidArtifactType(value: string): value is ArtifactType {
-  return VALID_ARTIFACT_TYPES.includes(value as ArtifactType);
-}
-
-interface GenerateArtifactBody {
-  project_id?: string;
-  artifact_type?: string;
-  regenerate?: boolean;
-  next_milestone?: boolean;
-  review_context?: {
-    completed_review?: string;
-    open_question_answers?: { question?: string; answer?: string }[];
-  };
-}
-
-function validateGenerateBody(body: GenerateArtifactBody): string | null {
-  if (!body.project_id?.trim()) {
-    return "project_id is required";
-  }
-
-  if (!body.artifact_type?.trim()) {
-    return "artifact_type is required";
-  }
-
-  if (!isValidArtifactType(body.artifact_type)) {
-    return "Invalid artifact_type";
-  }
-
-  return null;
-}
-
-function parseReviewContext(
-  body: GenerateArtifactBody
-): MilestoneReviewContext | undefined {
-  if (!body.review_context?.completed_review?.trim()) {
-    return undefined;
-  }
-
-  const openQuestionAnswers = (body.review_context.open_question_answers ?? [])
-    .filter((item) => item.question?.trim() && item.answer?.trim())
-    .map((item) => ({
-      question: item.question!.trim(),
-      answer: item.answer!.trim(),
-    }));
-
+function mapReviewContext(
+  reviewContext: NonNullable<
+    ReturnType<typeof GenerateArtifactSchema.parse>["review_context"]
+  >
+): MilestoneReviewContext {
   return {
-    completedReview: body.review_context.completed_review.trim(),
-    openQuestionAnswers,
+    completedReview: reviewContext.completed_review,
+    openQuestionAnswers: reviewContext.open_question_answers ?? [],
   };
 }
 
@@ -72,18 +29,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as GenerateArtifactBody;
-  const validationError = validateGenerateBody(body);
+  const body = await request.json();
+  const parsed = GenerateArtifactSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
-  const artifactType = body.artifact_type as ArtifactType;
+  const data = parsed.data;
 
   const hasAccess = await verifyProjectAccess(
     auth.supabase,
-    body.project_id!,
+    data.project_id,
     auth.user.id
   );
 
@@ -93,8 +50,8 @@ export async function POST(request: Request) {
 
   const thresholdValidation = await validateArtifactGeneration(
     auth.supabase,
-    body.project_id!,
-    artifactType
+    data.project_id,
+    data.artifact_type
   );
 
   if (!thresholdValidation.valid) {
@@ -107,22 +64,25 @@ export async function POST(request: Request) {
     );
   }
 
+  const reviewContext = data.review_context
+    ? mapReviewContext(data.review_context)
+    : undefined;
+
   const encoder = new TextEncoder();
-  const reviewContext = parseReviewContext(body);
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
         await streamArtifactGeneration(
           auth.supabase,
-          body.project_id!,
-          artifactType,
+          data.project_id,
+          data.artifact_type,
           (chunk) => {
             controller.enqueue(encoder.encode(chunk));
           },
           {
-            regenerate: body.regenerate === true,
-            nextMilestone: body.next_milestone === true,
+            regenerate: data.regenerate === true,
+            nextMilestone: data.next_milestone === true,
             reviewContext,
           }
         );

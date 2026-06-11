@@ -1,7 +1,10 @@
-import { isValidDomainName } from "@/lib/data/domains";
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import { getDomainRounds } from "@/lib/services/roundService";
+import {
+  GetRoundsQuerySchema,
+  invalidRequestResponse,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -12,27 +15,18 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("project_id");
-  const domainName = searchParams.get("domain_name");
+  const parsed = GetRoundsQuerySchema.safeParse({
+    project_id: searchParams.get("project_id"),
+    domain_name: searchParams.get("domain_name"),
+  });
 
-  if (!projectId?.trim()) {
-    return NextResponse.json({ error: "project_id is required" }, { status: 400 });
-  }
-
-  if (!domainName?.trim()) {
-    return NextResponse.json(
-      { error: "domain_name is required" },
-      { status: 400 }
-    );
-  }
-
-  if (!isValidDomainName(domainName)) {
-    return NextResponse.json({ error: "Invalid domain_name" }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const hasAccess = await verifyProjectAccess(
     auth.supabase,
-    projectId,
+    parsed.data.project_id,
     auth.user.id
   );
 
@@ -43,8 +37,8 @@ export async function GET(request: Request) {
   try {
     const rounds = await getDomainRounds(
       auth.supabase,
-      projectId,
-      domainName
+      parsed.data.project_id,
+      parsed.data.domain_name
     );
 
     return NextResponse.json({ rounds });

@@ -1,12 +1,11 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import { regeneratePendingRoundsForProject } from "@/lib/services/projectService";
-import type { DomainName } from "@/lib/types";
+import {
+  invalidRequestResponse,
+  RegeneratePendingSchema,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface RegeneratePendingBody {
-  domain_names?: DomainName[];
-}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -20,13 +19,11 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const { id } = await params;
-  const body = (await request.json()) as RegeneratePendingBody;
+  const body = await request.json();
+  const parsed = RegeneratePendingSchema.safeParse(body);
 
-  if (!body.domain_names || body.domain_names.length === 0) {
-    return NextResponse.json(
-      { error: "domain_names is required" },
-      { status: 400 }
-    );
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const hasAccess = await verifyProjectAccess(
@@ -43,7 +40,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     await regeneratePendingRoundsForProject(
       auth.user.id,
       id,
-      body.domain_names
+      parsed.data.domain_names
     );
 
     return NextResponse.json({ success: true });

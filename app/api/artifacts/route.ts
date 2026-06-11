@@ -1,6 +1,10 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { listArtifactsForProject } from "@/lib/services/artifactService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
+import {
+  invalidRequestResponse,
+  ProjectIdQuerySchema,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -11,15 +15,17 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("project_id");
+  const parsed = ProjectIdQuerySchema.safeParse({
+    project_id: searchParams.get("project_id"),
+  });
 
-  if (!projectId?.trim()) {
-    return NextResponse.json({ error: "project_id is required" }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const hasAccess = await verifyProjectAccess(
     auth.supabase,
-    projectId,
+    parsed.data.project_id,
     auth.user.id
   );
 
@@ -28,7 +34,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const artifacts = await listArtifactsForProject(auth.supabase, projectId);
+    const artifacts = await listArtifactsForProject(
+      auth.supabase,
+      parsed.data.project_id
+    );
     return NextResponse.json({ artifacts });
   } catch (error) {
     const message =

@@ -1,19 +1,11 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import { updateProjectDescription } from "@/lib/services/projectService";
+import {
+  invalidRequestResponse,
+  UpdateProjectSchema,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface UpdateProjectBody {
-  description?: string;
-}
-
-function validateUpdateBody(body: UpdateProjectBody): string | null {
-  if (!body.description?.trim()) {
-    return "description is required";
-  }
-
-  return null;
-}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -27,11 +19,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 
   const { id } = await params;
-  const body = (await request.json()) as UpdateProjectBody;
-  const validationError = validateUpdateBody(body);
+  const body = await request.json();
+  const parsed = UpdateProjectSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const hasAccess = await verifyProjectAccess(
@@ -48,7 +40,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const result = await updateProjectDescription(
       auth.user.id,
       id,
-      body.description!.trim()
+      parsed.data.description
     );
 
     return NextResponse.json(result);

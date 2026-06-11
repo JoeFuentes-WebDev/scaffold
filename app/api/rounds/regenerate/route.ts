@@ -1,34 +1,11 @@
-import { isValidDomainName } from "@/lib/data/domains";
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import { regenerateRound } from "@/lib/services/roundService";
+import {
+  invalidRequestResponse,
+  RegenerateRoundSchema,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface RegenerateRoundBody {
-  project_id?: string;
-  domain_name?: string;
-  round_id?: string;
-}
-
-function validateBody(body: RegenerateRoundBody): string | null {
-  if (!body.project_id?.trim()) {
-    return "project_id is required";
-  }
-
-  if (!body.domain_name?.trim()) {
-    return "domain_name is required";
-  }
-
-  if (!isValidDomainName(body.domain_name)) {
-    return "Invalid domain_name";
-  }
-
-  if (!body.round_id?.trim()) {
-    return "round_id is required";
-  }
-
-  return null;
-}
 
 export async function POST(request: Request) {
   const auth = await getAuthenticatedSupabase();
@@ -37,16 +14,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as RegenerateRoundBody;
-  const validationError = validateBody(body);
+  const body = await request.json();
+  const parsed = RegenerateRoundSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
+
+  const data = parsed.data;
 
   const hasAccess = await verifyProjectAccess(
     auth.supabase,
-    body.project_id!,
+    data.project_id,
     auth.user.id
   );
 
@@ -57,9 +36,9 @@ export async function POST(request: Request) {
   try {
     const round = await regenerateRound(
       auth.supabase,
-      body.project_id!,
-      body.domain_name!,
-      body.round_id!
+      data.project_id,
+      data.domain_name,
+      data.round_id
     );
 
     return NextResponse.json({ round });

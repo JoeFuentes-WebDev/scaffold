@@ -5,31 +5,11 @@ import {
   setDomainStatus,
 } from "@/lib/services/domainService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
-import type { DomainStatus } from "@/lib/types";
+import {
+  invalidRequestResponse,
+  UpdateDomainStatusSchema,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface UpdateDomainStatusBody {
-  status?: DomainStatus;
-}
-
-const VALID_STATUSES: DomainStatus[] = [
-  "locked",
-  "available",
-  "in_progress",
-  "complete",
-];
-
-function validateStatusBody(body: UpdateDomainStatusBody): string | null {
-  if (!body.status) {
-    return "status is required";
-  }
-
-  if (!VALID_STATUSES.includes(body.status)) {
-    return "Invalid status";
-  }
-
-  return null;
-}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -43,11 +23,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 
   const { id } = await params;
-  const body = (await request.json()) as UpdateDomainStatusBody;
-  const validationError = validateStatusBody(body);
+  const body = await request.json();
+  const parsed = UpdateDomainStatusSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const domain = await getDomainById(auth.supabase, id);
@@ -67,7 +47,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const updatedDomain = await setDomainStatus(id, body.status!);
+    const updatedDomain = await setDomainStatus(id, parsed.data.status);
     const unlockResult = await checkDomainUnlocks(domain.project_id);
 
     return NextResponse.json({

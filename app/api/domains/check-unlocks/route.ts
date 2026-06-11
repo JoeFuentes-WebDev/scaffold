@@ -1,19 +1,11 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import { checkDomainUnlocks } from "@/lib/services/domainService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
+import {
+  CheckUnlocksSchema,
+  invalidRequestResponse,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface CheckUnlocksBody {
-  project_id?: string;
-}
-
-function validateBody(body: CheckUnlocksBody): string | null {
-  if (!body.project_id?.trim()) {
-    return "project_id is required";
-  }
-
-  return null;
-}
 
 export async function POST(request: Request) {
   const auth = await getAuthenticatedSupabase();
@@ -22,16 +14,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as CheckUnlocksBody;
-  const validationError = validateBody(body);
+  const body = await request.json();
+  const parsed = CheckUnlocksSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
   const hasAccess = await verifyProjectAccess(
     auth.supabase,
-    body.project_id!,
+    parsed.data.project_id,
     auth.user.id
   );
 
@@ -40,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await checkDomainUnlocks(body.project_id!);
+    const result = await checkDomainUnlocks(parsed.data.project_id);
     return NextResponse.json(result);
   } catch (error) {
     const message =

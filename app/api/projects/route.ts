@@ -1,23 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { validateColdStartSeedAnswers } from "@/constants/coldStart";
 import { createProject } from "@/lib/services/projectService";
-import type { ColdStartSeedAnswers } from "@/lib/types";
+import {
+  CreateProjectSchema,
+  invalidRequestResponse,
+} from "@/lib/schemas";
 import { NextResponse } from "next/server";
-
-interface CreateProjectBody {
-  name?: string;
-  description?: string;
-  seed_answers?: Partial<ColdStartSeedAnswers>;
-  project_type?: "new" | "existing";
-}
-
-function validateCreateProjectBody(body: CreateProjectBody): string | null {
-  if (!body.name?.trim()) {
-    return "Project name is required";
-  }
-
-  return validateColdStartSeedAnswers(body.seed_answers);
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -29,25 +16,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json()) as CreateProjectBody;
-  const validationError = validateCreateProjectBody(body);
+  const body = await request.json();
+  const parsed = CreateProjectSchema.safeParse(body);
 
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  if (!parsed.success) {
+    return invalidRequestResponse(parsed.error);
   }
 
-  try {
-    const seedAnswers = {
-      what_it_does: body.seed_answers!.what_it_does!.trim(),
-      who_it_is_for: body.seed_answers!.who_it_is_for!.trim(),
-      v1_boundary: body.seed_answers!.v1_boundary!.trim(),
-    };
+  const data = parsed.data;
 
+  try {
     const result = await createProject(user.id, {
-      name: body.name!.trim(),
-      description: body.description?.trim(),
-      seed_answers: seedAnswers,
-      project_type: body.project_type ?? "new",
+      name: data.name,
+      description: data.description,
+      seed_answers: data.seed_answers,
+      project_type: data.project_type,
     });
 
     return NextResponse.json(result);
