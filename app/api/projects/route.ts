@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { validateColdStartSeedAnswers } from "@/constants/coldStart";
 import { createProject } from "@/lib/services/projectService";
+import type { ColdStartSeedAnswers } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 interface CreateProjectBody {
   name?: string;
   description?: string;
+  seed_answers?: Partial<ColdStartSeedAnswers>;
   project_type?: "new" | "existing";
 }
 
@@ -13,11 +16,7 @@ function validateCreateProjectBody(body: CreateProjectBody): string | null {
     return "Project name is required";
   }
 
-  if (!body.description?.trim()) {
-    return "Project description is required";
-  }
-
-  return null;
+  return validateColdStartSeedAnswers(body.seed_answers);
 }
 
 export async function POST(request: Request) {
@@ -38,9 +37,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    const seedAnswers = {
+      what_it_does: body.seed_answers!.what_it_does!.trim(),
+      who_it_is_for: body.seed_answers!.who_it_is_for!.trim(),
+      v1_boundary: body.seed_answers!.v1_boundary!.trim(),
+    };
+
     const result = await createProject(user.id, {
       name: body.name!.trim(),
-      description: body.description!.trim(),
+      description: body.description?.trim(),
+      seed_answers: seedAnswers,
       project_type: body.project_type ?? "new",
     });
 

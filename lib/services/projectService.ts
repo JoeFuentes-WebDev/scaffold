@@ -19,6 +19,7 @@ import type {
   UpdateProjectResult,
 } from "@/lib/types";
 
+import { buildProjectDescription } from "@/constants/coldStart";
 import { generateRound } from "@/lib/services/roundService";
 
 export async function createProject(
@@ -26,8 +27,16 @@ export async function createProject(
   input: CreateProjectInput
 ): Promise<{ project_id: string }> {
   const supabase = await createClient();
+  const description = buildProjectDescription(
+    input.seed_answers,
+    input.description
+  );
 
-  const project = await insertProject(supabase, userId, input);
+  const project = await insertProject(supabase, userId, {
+    name: input.name,
+    description,
+    project_type: input.project_type,
+  });
   await insertDomainsForProject(supabase, project.id);
 
   return { project_id: project.id };

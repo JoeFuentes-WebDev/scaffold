@@ -1,12 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { DOMAIN_DEFINITIONS, INITIAL_DOMAIN_STATUSES } from "@/constants/domains";
-import type { CreateProjectInput, Domain, Project } from "@/lib/types";
+import type { Domain, Project, ProjectType } from "@/lib/types";
+
+interface InsertProjectInput {
+  name: string;
+  description: string;
+  project_type?: ProjectType;
+}
 
 export async function insertProject(
   supabase: SupabaseClient,
   userId: string,
-  input: CreateProjectInput
+  input: InsertProjectInput
 ): Promise<Project> {
   const { data, error } = await supabase
     .from("projects")

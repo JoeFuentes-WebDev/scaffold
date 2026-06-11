@@ -74,8 +74,15 @@ export interface Domain {
 
 export interface CreateProjectInput {
   name: string;
-  description: string;
+  description?: string;
+  seed_answers: ColdStartSeedAnswers;
   project_type?: ProjectType;
+}
+
+export interface ColdStartSeedAnswers {
+  what_it_does: string;
+  who_it_is_for: string;
+  v1_boundary: string;
 }
 
 export interface RoundQuestion {
