@@ -35,6 +35,13 @@ export interface Artifact {
   updated_at: string;
 }
 
+export interface ArtifactsWorkspaceUi {
+  canGenerateNextMilestone: boolean;
+  milestoneSequenceNumber: number;
+  nextMilestoneDisplayName: string;
+  rowNaming: Record<ArtifactType, { displayName: string; filename: string }>;
+}
+
 export interface GenerateArtifactInput {
   project_id: string;
   artifact_type: ArtifactType;

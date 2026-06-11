@@ -23,7 +23,7 @@ If you encounter a decision not covered here:
 - All Anthropic API calls go through Next.js API routes only
 - Never call the Anthropic API from a component or hook
 - `ANTHROPIC_API_KEY` is server-side only — never referenced in any client file
-- Use `claude-sonnet-4-20250514` as the model
+- Use `claude-sonnet-4-6` as the model
 - All prompts live in `/lib/prompts/` as named exported functions — never inline in API routes
 
 ---

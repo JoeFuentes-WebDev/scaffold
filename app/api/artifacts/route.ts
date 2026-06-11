@@ -1,5 +1,5 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
-import { listArtifactsForProject } from "@/lib/services/artifactService";
+import { getArtifactsWorkspaceForProject } from "@/lib/services/artifactService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import {
   invalidRequestResponse,
@@ -34,11 +34,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const artifacts = await listArtifactsForProject(
+    const result = await getArtifactsWorkspaceForProject(
       auth.supabase,
       parsed.data.project_id
     );
-    return NextResponse.json({ artifacts });
+    return NextResponse.json(result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch artifacts";

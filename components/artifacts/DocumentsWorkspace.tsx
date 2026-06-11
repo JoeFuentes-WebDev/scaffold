@@ -14,19 +14,16 @@ import {
   getArtifactFilename,
 } from "@/constants/artifacts";
 import {
-  canGenerateNextMilestone,
-  getArtifactNaming,
-  getMilestoneRowNaming,
-  getNextMilestoneNaming,
-  getReviewNamingForMilestone,
-  hasGeneratedMilestone,
-} from "@/lib/artifacts/naming";
-import {
   formatDomainList,
   getMissingDomainsForArtifact,
   isArtifactReady,
 } from "@/lib/documents/thresholds";
-import type { Artifact, ArtifactType, Domain } from "@/lib/types";
+import type {
+  Artifact,
+  ArtifactsWorkspaceUi,
+  ArtifactType,
+  Domain,
+} from "@/lib/types";
 
 interface DocumentsWorkspaceProps {
   projectId: string;
@@ -37,6 +34,32 @@ interface GenerateOptions {
   regenerate?: boolean;
   nextMilestone?: boolean;
   reviewContext?: ReviewGateResult;
+}
+
+function buildDefaultWorkspaceUi(): ArtifactsWorkspaceUi {
+  return {
+    canGenerateNextMilestone: false,
+    milestoneSequenceNumber: 1,
+    nextMilestoneDisplayName: getArtifactFilename("milestone", 2),
+    rowNaming: {
+      onboarding: {
+        displayName: getArtifactFilename("onboarding", 1),
+        filename: getArtifactFilename("onboarding", 1),
+      },
+      milestone: {
+        displayName: getArtifactFilename("milestone", 1),
+        filename: getArtifactFilename("milestone", 1),
+      },
+      review: {
+        displayName: getArtifactFilename("review", 1),
+        filename: getArtifactFilename("review", 1),
+      },
+      env_manifest: {
+        displayName: getArtifactFilename("env_manifest", 1),
+        filename: getArtifactFilename("env_manifest", 1),
+      },
+    },
+  };
 }
 
 function downloadMarkdownFile(filename: string, content: string): void {
@@ -68,6 +91,9 @@ export function DocumentsWorkspace({
   domains,
 }: DocumentsWorkspaceProps) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [workspaceUi, setWorkspaceUi] = useState<ArtifactsWorkspaceUi>(
+    buildDefaultWorkspaceUi
+  );
   const [expandedType, setExpandedType] = useState<ArtifactType | null>(null);
   const [generatingType, setGeneratingType] = useState<ArtifactType | null>(
     null
@@ -77,17 +103,12 @@ export function DocumentsWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
-  const milestoneArtifact = getArtifactForType(artifacts, "milestone");
-  const reviewArtifact = getArtifactForType(artifacts, "review");
-  const milestoneNaming = getMilestoneRowNaming(milestoneArtifact);
-  const nextMilestoneNaming = getNextMilestoneNaming(milestoneArtifact);
-  const reviewNaming = getReviewNamingForMilestone(milestoneArtifact);
-
   async function loadArtifacts() {
     const params = new URLSearchParams({ project_id: projectId });
     const response = await fetch(`/api/artifacts?${params.toString()}`);
     const data = (await response.json()) as {
       artifacts?: Artifact[];
+      workspace?: ArtifactsWorkspaceUi;
       error?: string;
     };
 
@@ -97,6 +118,7 @@ export function DocumentsWorkspace({
     }
 
     setArtifacts(data.artifacts ?? []);
+    setWorkspaceUi(data.workspace ?? buildDefaultWorkspaceUi());
   }
 
   useEffect(() => {
@@ -108,15 +130,7 @@ export function DocumentsWorkspace({
   );
 
   function getRowNaming(artifactType: ArtifactType) {
-    if (artifactType === "milestone") {
-      return milestoneNaming;
-    }
-
-    if (artifactType === "review") {
-      return reviewNaming;
-    }
-
-    return getArtifactNaming(artifactType, 1);
+    return workspaceUi.rowNaming[artifactType];
   }
 
   function getPreviewContent(artifactType: ArtifactType): string {
@@ -288,16 +302,16 @@ export function DocumentsWorkspace({
 
     return (
       <ReviewGate
-        nextMilestoneLabel={nextMilestoneNaming.displayName}
+        nextMilestoneLabel={workspaceUi.nextMilestoneDisplayName}
         onCancel={handleCancelReviewGate}
         onComplete={handleReviewGateComplete}
-        reviewSequenceNumber={milestoneNaming.sequenceNumber}
+        reviewSequenceNumber={workspaceUi.milestoneSequenceNumber}
       />
     );
   }
 
   function renderNextMilestoneButton() {
-    if (!canGenerateNextMilestone(milestoneArtifact, reviewArtifact)) {
+    if (!workspaceUi.canGenerateNextMilestone) {
       return null;
     }
 
@@ -313,7 +327,7 @@ export function DocumentsWorkspace({
         type="button"
         variant="secondary"
       >
-        Generate {nextMilestoneNaming.displayName}
+        Generate {workspaceUi.nextMilestoneDisplayName}
       </Button>
     );
   }

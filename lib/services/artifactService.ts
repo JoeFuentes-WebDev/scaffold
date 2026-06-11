@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
-  getNextMilestoneSequenceNumber,
   canGenerateNextMilestone,
+  getArtifactNaming,
+  getMilestoneRowNaming,
+  getNextMilestoneNaming,
+  getNextMilestoneSequenceNumber,
+  getReviewNamingForMilestone,
   hasGeneratedMilestone,
-} from "@/lib/artifacts/naming";
+} from "@/lib/services/artifactNaming";
 import { streamClaude } from "@/lib/claude/client";
 import { getArtifactByType, getArtifactsForProject, upsertArtifact } from "@/lib/data/artifacts";
 import { getMissingDomainsForArtifact } from "@/lib/documents/thresholds";
@@ -27,6 +31,7 @@ import {
 import { assembleProjectModel } from "@/lib/services/projectModelService";
 import type {
   Artifact,
+  ArtifactsWorkspaceUi,
   ArtifactType,
   DomainName,
   MilestoneReviewContext,
@@ -164,11 +169,55 @@ export async function validateArtifactGeneration(
   };
 }
 
+function getArtifactForType(
+  artifacts: Artifact[],
+  artifactType: ArtifactType
+): Artifact | null {
+  return artifacts.find((item) => item.artifact_type === artifactType) ?? null;
+}
+
+export function buildArtifactsWorkspaceUi(
+  artifacts: Artifact[]
+): ArtifactsWorkspaceUi {
+  const milestoneArtifact = getArtifactForType(artifacts, "milestone");
+  const reviewArtifact = getArtifactForType(artifacts, "review");
+  const milestoneNaming = getMilestoneRowNaming(milestoneArtifact);
+  const nextMilestoneNaming = getNextMilestoneNaming(milestoneArtifact);
+  const reviewNaming = getReviewNamingForMilestone(milestoneArtifact);
+
+  return {
+    canGenerateNextMilestone: canGenerateNextMilestone(
+      milestoneArtifact,
+      reviewArtifact
+    ),
+    milestoneSequenceNumber: milestoneNaming.sequenceNumber,
+    nextMilestoneDisplayName: nextMilestoneNaming.displayName,
+    rowNaming: {
+      onboarding: getArtifactNaming("onboarding", 1),
+      milestone: milestoneNaming,
+      review: reviewNaming,
+      env_manifest: getArtifactNaming("env_manifest", 1),
+    },
+  };
+}
+
 export async function listArtifactsForProject(
   supabase: SupabaseClient,
   projectId: string
 ): Promise<Artifact[]> {
   return getArtifactsForProject(supabase, projectId);
+}
+
+export async function getArtifactsWorkspaceForProject(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<{ artifacts: Artifact[]; workspace: ArtifactsWorkspaceUi }> {
+  const artifacts = await getArtifactsForProject(supabase, projectId);
+
+  return {
+    artifacts,
+    workspace: buildArtifactsWorkspaceUi(artifacts),
+  };
 }
 
 export async function streamArtifactGeneration(
@@ -274,13 +323,3 @@ export async function streamArtifactGeneration(
 
   return { content, artifact, isPartial };
 }
-
-export {
-  canGenerateNextMilestone,
-  getArtifactNaming,
-  getMilestoneRowNaming,
-  getNextMilestoneNaming,
-  getReviewNamingForMilestone,
-  hasGeneratedMilestone,
-  hasGeneratedReview,
-} from "@/lib/artifacts/naming";
