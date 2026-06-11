@@ -14,6 +14,7 @@ import {
   getArtifactFilename,
 } from "@/constants/artifacts";
 import {
+  canGenerateNextMilestone,
   getArtifactNaming,
   getMilestoneRowNaming,
   getNextMilestoneNaming,
@@ -77,6 +78,7 @@ export function DocumentsWorkspace({
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   const milestoneArtifact = getArtifactForType(artifacts, "milestone");
+  const reviewArtifact = getArtifactForType(artifacts, "review");
   const milestoneNaming = getMilestoneRowNaming(milestoneArtifact);
   const nextMilestoneNaming = getNextMilestoneNaming(milestoneArtifact);
   const reviewNaming = getReviewNamingForMilestone(milestoneArtifact);
@@ -295,7 +297,7 @@ export function DocumentsWorkspace({
   }
 
   function renderNextMilestoneButton() {
-    if (!hasGeneratedMilestone(milestoneArtifact)) {
+    if (!canGenerateNextMilestone(milestoneArtifact, reviewArtifact)) {
       return null;
     }
 

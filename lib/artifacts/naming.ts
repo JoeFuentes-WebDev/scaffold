@@ -56,6 +56,29 @@ export function hasGeneratedMilestone(milestoneArtifact: Artifact | null): boole
   );
 }
 
+export function hasGeneratedReview(reviewArtifact: Artifact | null): boolean {
+  return Boolean(
+    reviewArtifact?.content && reviewArtifact.status === "generated"
+  );
+}
+
+export function canGenerateNextMilestone(
+  milestoneArtifact: Artifact | null,
+  reviewArtifact: Artifact | null
+): boolean {
+  if (!milestoneArtifact?.content || milestoneArtifact.status !== "generated") {
+    return false;
+  }
+
+  if (!hasGeneratedReview(reviewArtifact)) {
+    return false;
+  }
+
+  return (
+    reviewArtifact!.sequence_number === (milestoneArtifact.sequence_number ?? 1)
+  );
+}
+
 export function getReviewNamingForMilestone(
   milestoneArtifact: Artifact | null
 ): ArtifactNaming {

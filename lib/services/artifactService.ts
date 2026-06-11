@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   getNextMilestoneSequenceNumber,
+  canGenerateNextMilestone,
   hasGeneratedMilestone,
 } from "@/lib/artifacts/naming";
 import { streamClaude } from "@/lib/claude/client";
@@ -189,6 +190,25 @@ export async function streamArtifactGeneration(
     );
   }
 
+  if (options?.nextMilestone) {
+    const milestoneArtifact = await getArtifactByType(
+      supabase,
+      projectId,
+      "milestone"
+    );
+    const reviewArtifact = await getArtifactByType(
+      supabase,
+      projectId,
+      "review"
+    );
+
+    if (!canGenerateNextMilestone(milestoneArtifact, reviewArtifact)) {
+      throw new Error(
+        "Generate the review for the current milestone before starting the next one."
+      );
+    }
+  }
+
   const existingArtifact = await getArtifactByType(
     supabase,
     projectId,
@@ -256,9 +276,11 @@ export async function streamArtifactGeneration(
 }
 
 export {
+  canGenerateNextMilestone,
   getArtifactNaming,
   getMilestoneRowNaming,
   getNextMilestoneNaming,
   getReviewNamingForMilestone,
   hasGeneratedMilestone,
+  hasGeneratedReview,
 } from "@/lib/artifacts/naming";
