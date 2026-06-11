@@ -22,8 +22,12 @@ function getDomainLabel(domain: Domain): string {
   return match?.label ?? domain.name;
 }
 
+function isAnsweredRound(round: Round): boolean {
+  return round.status === "answered";
+}
+
 function getAnsweredRounds(rounds: Round[]): Round[] {
-  return rounds.filter((round) => round.status === "answered");
+  return rounds.filter(isAnsweredRound);
 }
 
 function getPendingRound(rounds: Round[]): Round | null {
@@ -84,7 +88,7 @@ export function DomainWorkspace({
     setActiveRound(getPendingRound(loadedRounds));
   }
 
-  useEffect(() => {
+  function syncDomainRounds() {
     if (domain.status === "available") {
       setRounds([]);
       setActiveRound(null);
@@ -92,7 +96,9 @@ export function DomainWorkspace({
     }
 
     void loadRounds();
-  }, [domain.id, domain.status, projectId]);
+  }
+
+  useEffect(syncDomainRounds, [domain.id, domain.status, projectId]);
 
   async function handleStart() {
     setError(null);
@@ -313,6 +319,10 @@ export function DomainWorkspace({
     );
   }
 
+  function renderAnsweredRound(round: Round) {
+    return <AnsweredRoundSummary key={round.id} round={round} />;
+  }
+
   function renderInProgressState() {
     return (
       <div className="space-y-6">
@@ -321,9 +331,7 @@ export function DomainWorkspace({
             <h3 className="text-sm font-medium text-[#111827]">
               Previous rounds
             </h3>
-            {answeredRounds.map((round) => (
-              <AnsweredRoundSummary key={round.id} round={round} />
-            ))}
+            {answeredRounds.map(renderAnsweredRound)}
           </div>
         ) : null}
 
@@ -355,9 +363,7 @@ export function DomainWorkspace({
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-[#111827]">Completed rounds</h3>
         {answeredRounds.length > 0 ? (
-          answeredRounds.map((round) => (
-            <AnsweredRoundSummary key={round.id} round={round} />
-          ))
+          answeredRounds.map(renderAnsweredRound)
         ) : (
           <p className="text-sm text-[#6B7280]">No answered rounds yet.</p>
         )}

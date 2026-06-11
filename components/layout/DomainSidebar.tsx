@@ -69,19 +69,23 @@ export function DomainSidebar({
   documentsStatus,
   onTabSelect,
 }: DomainSidebarProps) {
+  function renderDomainTab(domain: (typeof DOMAIN_DEFINITIONS)[number]) {
+    return (
+      <DomainTabItem
+        domainName={domain.name}
+        isActive={activeTab === domain.name}
+        key={domain.name}
+        label={domain.label}
+        onSelect={onTabSelect}
+        status={getDomainStatus(domains, domain.name)}
+      />
+    );
+  }
+
   return (
     <aside className="flex w-60 shrink-0 flex-col gap-1 border-r border-[#E5E7EB] bg-white p-4">
       <nav className="flex flex-col gap-1">
-        {DOMAIN_DEFINITIONS.map((domain) => (
-          <DomainTabItem
-            domainName={domain.name}
-            isActive={activeTab === domain.name}
-            key={domain.name}
-            label={domain.label}
-            onSelect={onTabSelect}
-            status={getDomainStatus(domains, domain.name)}
-          />
-        ))}
+        {DOMAIN_DEFINITIONS.map(renderDomainTab)}
         <div className="my-2 border-t border-[#E5E7EB]" />
         <DomainTabItem
           domainName="documents"

@@ -125,13 +125,17 @@ export function DocumentsWorkspace({
     setWorkspaceUi(data.workspace ?? buildDefaultWorkspaceUi());
   }
 
-  useEffect(() => {
+  function refreshArtifacts() {
     void loadArtifacts();
-  }, [projectId, refreshKey]);
+  }
 
-  const generatedArtifacts = artifacts.filter((artifact) =>
-    hasGeneratedContent(artifact)
-  );
+  useEffect(refreshArtifacts, [projectId, refreshKey]);
+
+  function isGeneratedArtifact(artifact: Artifact): boolean {
+    return hasGeneratedContent(artifact);
+  }
+
+  const generatedArtifacts = artifacts.filter(isGeneratedArtifact);
 
   function getRowNaming(artifactType: ArtifactType) {
     return workspaceUi.rowNaming[artifactType];
@@ -287,18 +291,6 @@ export function DocumentsWorkspace({
     });
   }
 
-  function getGenerateHandler(artifactType: ArtifactType) {
-    return function triggerGenerate() {
-      void handleGenerate(artifactType);
-    };
-  }
-
-  function getRegenerateHandler(artifactType: ArtifactType) {
-    return function triggerRegenerate() {
-      void handleGenerate(artifactType, { regenerate: true });
-    };
-  }
-
   function renderReviewGate() {
     if (!showReviewGate) {
       return null;
@@ -347,6 +339,22 @@ export function DocumentsWorkspace({
         ? `Generate ${naming.displayName}`
         : "Generate";
 
+    function handleRowDownload() {
+      handleDownload(artifactType);
+    }
+
+    function handleRowToggleExpand() {
+      handleToggleExpand(artifactType);
+    }
+
+    function handleRowGenerate() {
+      void handleGenerate(artifactType);
+    }
+
+    function handleRowRegenerate() {
+      void handleGenerate(artifactType, { regenerate: true });
+    }
+
     return (
       <div className="space-y-2" key={artifactType}>
         <ArtifactRow
@@ -363,10 +371,10 @@ export function DocumentsWorkspace({
           isReady={threshold.isReady}
           isStreaming={generatingType === artifactType}
           missingLabel={threshold.missingLabel}
-          onDownload={() => handleDownload(artifactType)}
-          onGenerate={getGenerateHandler(artifactType)}
-          onRegenerate={getRegenerateHandler(artifactType)}
-          onToggleExpand={() => handleToggleExpand(artifactType)}
+          onDownload={handleRowDownload}
+          onGenerate={handleRowGenerate}
+          onRegenerate={handleRowRegenerate}
+          onToggleExpand={handleRowToggleExpand}
           previewContent={getPreviewContent(artifactType)}
         />
         {artifactType === "milestone" ? (
@@ -374,6 +382,10 @@ export function DocumentsWorkspace({
         ) : null}
       </div>
     );
+  }
+
+  function renderDefinitionRow(definition: (typeof ARTIFACT_DEFINITIONS)[number]) {
+    return renderArtifactRow(definition);
   }
 
   return (
@@ -395,9 +407,7 @@ export function DocumentsWorkspace({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div className="flex flex-col gap-4">
-        {ARTIFACT_DEFINITIONS.map((definition) =>
-          renderArtifactRow(definition)
-        )}
+        {ARTIFACT_DEFINITIONS.map(renderDefinitionRow)}
       </div>
     </div>
   );

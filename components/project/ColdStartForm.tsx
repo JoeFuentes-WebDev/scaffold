@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { COLD_START_SEED_QUESTIONS } from "@/constants/coldStart";
+import { SeedQuestionField } from "@/components/project/SeedQuestionField";
 import type { ColdStartSeedAnswers } from "@/lib/types";
 
 type ProjectType = "new" | "existing";
@@ -36,9 +37,9 @@ function isColdStartComplete(
     return false;
   }
 
-  return COLD_START_SEED_QUESTIONS.every((question) =>
-    Boolean(seedAnswers[question.key].trim())
-  );
+  return COLD_START_SEED_QUESTIONS.every(function hasSeedAnswer(question) {
+    return Boolean(seedAnswers[question.key].trim());
+  });
 }
 
 export function ColdStartForm({
@@ -112,13 +113,32 @@ export function ColdStartForm({
     setDescription(event.target.value);
   }
 
-  function handleSeedAnswerChange(key: keyof ColdStartSeedAnswers) {
-    return (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setSeedAnswers((current) => ({
+  function handleSeedAnswerChange(
+    key: keyof ColdStartSeedAnswers,
+    value: string
+  ) {
+    function applySeedAnswerUpdate(current: ColdStartSeedAnswers) {
+      return {
         ...current,
-        [key]: event.target.value,
-      }));
-    };
+        [key]: value,
+      };
+    }
+
+    setSeedAnswers(applySeedAnswerUpdate);
+  }
+
+  function renderSeedQuestion(
+    question: (typeof COLD_START_SEED_QUESTIONS)[number]
+  ) {
+    return (
+      <SeedQuestionField
+        fieldKey={question.key}
+        key={question.key}
+        label={question.label}
+        onValueChange={handleSeedAnswerChange}
+        value={seedAnswers[question.key]}
+      />
+    );
   }
 
   function handleSelectNew() {
@@ -184,17 +204,7 @@ export function ColdStartForm({
       </div>
 
       <div className="flex flex-col gap-4">
-        {COLD_START_SEED_QUESTIONS.map((question) => (
-          <div className="flex flex-col gap-2" key={question.key}>
-            <Label htmlFor={`seed-${question.key}`}>{question.label}</Label>
-            <Textarea
-              id={`seed-${question.key}`}
-              onChange={handleSeedAnswerChange(question.key)}
-              rows={3}
-              value={seedAnswers[question.key]}
-            />
-          </div>
-        ))}
+        {COLD_START_SEED_QUESTIONS.map(renderSeedQuestion)}
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

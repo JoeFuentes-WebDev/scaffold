@@ -24,6 +24,13 @@ interface ReviewGateProps {
 
 type GateStep = "upload" | "open_questions" | "manual_steps" | "ready";
 
+function mapOpenQuestionToRoundItem(text: string, index: number) {
+  return {
+    id: `open-question-${index}`,
+    text,
+  };
+}
+
 function buildOpenQuestionsRound(openQuestions: string[]): Round {
   return {
     id: "review-gate",
@@ -31,13 +38,22 @@ function buildOpenQuestionsRound(openQuestions: string[]): Round {
     domain_name: "milestone",
     round_number: 1,
     status: "pending",
-    questions: openQuestions.map((text, index) => ({
-      id: `open-question-${index}`,
-      text,
-    })),
+    questions: openQuestions.map(mapOpenQuestionToRoundItem),
     domains_affected: [],
     created_at: "",
     updated_at: "",
+  };
+}
+
+function mapAnswerToPair(
+  round: Round,
+  answer: EvaluateAnswerInput
+): { question: string; answer: string } {
+  const question = round.questions.find((item) => item.id === answer.question_id);
+
+  return {
+    question: question?.text ?? answer.question_id,
+    answer: answer.answer,
   };
 }
 
@@ -45,15 +61,8 @@ function convertAnswersToPairs(
   round: Round,
   answers: EvaluateAnswerInput[]
 ): { question: string; answer: string }[] {
-  return answers.map((answer) => {
-    const question = round.questions.find(
-      (item) => item.id === answer.question_id
-    );
-
-    return {
-      question: question?.text ?? answer.question_id,
-      answer: answer.answer,
-    };
+  return answers.map(function mapAnswer(answer) {
+    return mapAnswerToPair(round, answer);
   });
 }
 
@@ -93,11 +102,14 @@ export function ReviewGate({
 
     const reader = new FileReader();
 
-    reader.onload = () => {
-      void parseUploadedReview(String(reader.result ?? ""));
-    };
+    reader.onload = handleReaderLoad;
 
     reader.readAsText(file);
+  }
+
+  function handleReaderLoad(event: ProgressEvent<FileReader>) {
+    const content = String(event.target?.result ?? "");
+    void parseUploadedReview(content);
   }
 
   async function parseUploadedReview(content: string) {
@@ -162,10 +174,14 @@ export function ReviewGate({
   }
 
   function handleManualStepToggle(index: number, checked: boolean) {
-    setManualStepsChecked((previous) => ({
-      ...previous,
-      [index]: checked,
-    }));
+    function applyManualStepUpdate(previous: Record<number, boolean>) {
+      return {
+        ...previous,
+        [index]: checked,
+      };
+    }
+
+    setManualStepsChecked(applyManualStepUpdate);
   }
 
   function handleContinueFromManualSteps() {
@@ -177,9 +193,11 @@ export function ReviewGate({
       return true;
     }
 
-    return parsedReview.manualSteps.every(
-      (_step, index) => manualStepsChecked[index] === true
-    );
+    function isManualStepChecked(_step: string, index: number) {
+      return manualStepsChecked[index] === true;
+    }
+
+    return parsedReview.manualSteps.every(isManualStepChecked);
   }
 
   function handleGenerateNextMilestone() {
@@ -246,6 +264,18 @@ export function ReviewGate({
     );
   }
 
+  function renderManualStep(step: string, index: number) {
+    return (
+      <ManualStepItem
+        checked={manualStepsChecked[index] ?? false}
+        index={index}
+        key={step}
+        onToggle={handleManualStepToggle}
+        step={step}
+      />
+    );
+  }
+
   function renderManualStepsStep() {
     if (!parsedReview) {
       return null;
@@ -257,15 +287,7 @@ export function ReviewGate({
           Confirm manual steps are complete
         </p>
         <div className="space-y-3">
-          {parsedReview.manualSteps.map((step, index) => (
-            <ManualStepItem
-              checked={manualStepsChecked[index] ?? false}
-              index={index}
-              key={step}
-              onToggle={handleManualStepToggle}
-              step={step}
-            />
-          ))}
+          {parsedReview.manualSteps.map(renderManualStep)}
         </div>
         <Button
           disabled={!areAllManualStepsChecked()}

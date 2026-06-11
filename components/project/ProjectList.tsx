@@ -7,11 +7,13 @@ interface ProjectListProps {
 }
 
 export function ProjectList({ projects }: ProjectListProps) {
+  function renderProjectCard(project: Project) {
+    return <ProjectCard key={project.id} project={project} />;
+  }
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {projects.map((project) => (
-        <ProjectCard key={project.id} project={project} />
-      ))}
+      {projects.map(renderProjectCard)}
     </div>
   );
 }

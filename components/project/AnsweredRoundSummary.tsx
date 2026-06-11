@@ -30,6 +30,17 @@ export function AnsweredRoundSummary({ round }: AnsweredRoundSummaryProps) {
     setIsOpen(open);
   }
 
+  function renderQuestion(question: Round["questions"][number]) {
+    return (
+      <div key={question.id}>
+        <p className="text-sm font-medium text-[#111827]">{question.text}</p>
+        <p className="mt-1 text-sm text-[#6B7280]">
+          {question.answer ?? "No answer recorded."}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Collapsible onOpenChange={handleOpenChange} open={isOpen}>
       <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between rounded-md border border-[#E5E7EB] px-4 py-3 text-left text-sm font-medium text-[#111827] hover:bg-[#F9FAFB]">
@@ -42,14 +53,7 @@ export function AnsweredRoundSummary({ round }: AnsweredRoundSummaryProps) {
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-4 rounded-b-md border border-t-0 border-[#E5E7EB] px-4 py-3">
-        {round.questions.map((question) => (
-          <div key={question.id}>
-            <p className="text-sm font-medium text-[#111827]">{question.text}</p>
-            <p className="mt-1 text-sm text-[#6B7280]">
-              {question.answer ?? "No answer recorded."}
-            </p>
-          </div>
-        ))}
+        {round.questions.map(renderQuestion)}
       </CollapsibleContent>
     </Collapsible>
   );

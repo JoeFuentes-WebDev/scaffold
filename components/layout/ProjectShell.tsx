@@ -72,10 +72,12 @@ export function ProjectShell({
   const [documentsStatus, setDocumentsStatus] = useState(initialDocumentsStatus);
   const [activeTab, setActiveTab] = useState<ActiveTab>("product");
 
-  useEffect(() => {
+  function syncInitialProjectState() {
     setDomains(initialDomains);
     setDocumentsStatus(initialDocumentsStatus);
-  }, [initialDomains, initialDocumentsStatus]);
+  }
+
+  useEffect(syncInitialProjectState, [initialDomains, initialDocumentsStatus]);
 
   const activeDomain = getActiveDomain(domains, activeTab);
 

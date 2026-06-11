@@ -57,14 +57,22 @@ function isQuestionAnswered(
   return Boolean(answers[questionId]?.trim());
 }
 
+function isRoundQuestionAnswered(
+  question: Round["questions"][number],
+  answers: Record<string, string>,
+  naChecked: Record<string, boolean>
+): boolean {
+  return isQuestionAnswered(question.id, answers, naChecked);
+}
+
 function areAllQuestionsAnswered(
   round: Round,
   answers: Record<string, string>,
   naChecked: Record<string, boolean>
 ): boolean {
-  return round.questions.every((question) =>
-    isQuestionAnswered(question.id, answers, naChecked)
-  );
+  return round.questions.every(function checkQuestionAnswered(question) {
+    return isRoundQuestionAnswered(question, answers, naChecked);
+  });
 }
 
 export function QuestionRound({
@@ -74,55 +82,81 @@ export function QuestionRound({
   isLoading,
   isRegenerating,
 }: QuestionRoundProps) {
-  const [answers, setAnswers] = useState<Record<string, string>>(() =>
-    buildInitialAnswers(round)
-  );
-  const [naChecked, setNaChecked] = useState<Record<string, boolean>>(() =>
-    buildInitialNaState(round)
-  );
+  const [answers, setAnswers] = useState(buildInitialAnswersForRound);
+  const [naChecked, setNaChecked] = useState(buildInitialNaStateForRound);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
 
-  useEffect(() => {
+  function buildInitialAnswersForRound() {
+    return buildInitialAnswers(round);
+  }
+
+  function buildInitialNaStateForRound() {
+    return buildInitialNaState(round);
+  }
+
+  function syncRoundStateFromProps() {
     setAnswers(buildInitialAnswers(round));
     setNaChecked(buildInitialNaState(round));
-  }, [round.id]);
+  }
+
+  useEffect(syncRoundStateFromProps, [round.id]);
 
   function handleAnswerChange(questionId: string, value: string) {
-    setAnswers((previous) => ({
-      ...previous,
-      [questionId]: value,
-    }));
+    function applyAnswerUpdate(previous: Record<string, string>) {
+      return {
+        ...previous,
+        [questionId]: value,
+      };
+    }
+
+    setAnswers(applyAnswerUpdate);
   }
 
   function handleNaChange(questionId: string, checked: boolean) {
-    setNaChecked((previous) => ({
-      ...previous,
-      [questionId]: checked,
-    }));
+    function applyNaUpdate(previous: Record<string, boolean>) {
+      return {
+        ...previous,
+        [questionId]: checked,
+      };
+    }
+
+    setNaChecked(applyNaUpdate);
 
     if (checked) {
-      setAnswers((previous) => ({
-        ...previous,
-        [questionId]: NA_ANSWER_SENTINEL,
-      }));
+      function applyNaAnswerUpdate(previous: Record<string, string>) {
+        return {
+          ...previous,
+          [questionId]: NA_ANSWER_SENTINEL,
+        };
+      }
+
+      setAnswers(applyNaAnswerUpdate);
       return;
     }
 
-    setAnswers((previous) => ({
-      ...previous,
-      [questionId]: "",
-    }));
+    function clearNaAnswer(previous: Record<string, string>) {
+      return {
+        ...previous,
+        [questionId]: "",
+      };
+    }
+
+    setAnswers(clearNaAnswer);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const payload = round.questions.map((question) => ({
-      question_id: question.id,
-      answer: naChecked[question.id]
-        ? NA_ANSWER_SENTINEL
-        : answers[question.id]?.trim() ?? "",
-    }));
+    function mapQuestionToAnswer(question: Round["questions"][number]) {
+      return {
+        question_id: question.id,
+        answer: naChecked[question.id]
+          ? NA_ANSWER_SENTINEL
+          : answers[question.id]?.trim() ?? "",
+      };
+    }
+
+    const payload = round.questions.map(mapQuestionToAnswer);
 
     onSubmit(payload);
   }
@@ -144,20 +178,24 @@ export function QuestionRound({
     isLoading || !areAllQuestionsAnswered(round, answers, naChecked);
   const showRegenerateButton = round.status === "pending";
 
+  function renderQuestion(question: Round["questions"][number]) {
+    return (
+      <QuestionItem
+        answer={answers[question.id] ?? ""}
+        isLoading={isLoading}
+        isNa={naChecked[question.id] ?? false}
+        key={question.id}
+        onAnswerChange={handleAnswerChange}
+        onNaChange={handleNaChange}
+        question={question}
+      />
+    );
+  }
+
   return (
     <>
       <form className="space-y-6" onSubmit={handleSubmit}>
-        {round.questions.map((question) => (
-          <QuestionItem
-            answer={answers[question.id] ?? ""}
-            isLoading={isLoading}
-            isNa={naChecked[question.id] ?? false}
-            key={question.id}
-            onAnswerChange={handleAnswerChange}
-            onNaChange={handleNaChange}
-            question={question}
-          />
-        ))}
+        {round.questions.map(renderQuestion)}
         <div className="flex flex-wrap gap-3">
           <Button disabled={submitDisabled} type="submit">
             {isLoading ? "Evaluating..." : "Submit Answers"}
