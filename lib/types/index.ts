@@ -58,6 +58,12 @@ export interface MilestoneReviewContext {
   openQuestionAnswers: { question: string; answer: string }[];
 }
 
+export interface ParsedReview {
+  rawContent: string;
+  openQuestions: string[];
+  manualSteps: string[];
+}
+
 export interface StreamArtifactOptions {
   regenerate?: boolean;
   nextMilestone?: boolean;

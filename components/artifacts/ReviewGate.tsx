@@ -7,11 +7,7 @@ import { QuestionRound } from "@/components/project/QuestionRound";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getArtifactFilename } from "@/constants/artifacts";
-import {
-  parseReviewMarkdown,
-  type ParsedReview,
-} from "@/lib/review/parseReviewMarkdown";
-import type { EvaluateAnswerInput, Round } from "@/lib/types";
+import type { EvaluateAnswerInput, ParsedReview, Round } from "@/lib/types";
 
 export interface ReviewGateResult {
   completedReview: string;
@@ -76,6 +72,8 @@ export function ReviewGate({
   const [manualStepsChecked, setManualStepsChecked] = useState<
     Record<number, boolean>
   >({});
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [isParsingReview, setIsParsingReview] = useState(false);
 
   const reviewFilename = getArtifactFilename("review", reviewSequenceNumber);
   const openQuestionsRound = parsedReview
@@ -96,25 +94,49 @@ export function ReviewGate({
     const reader = new FileReader();
 
     reader.onload = () => {
-      const content = String(reader.result ?? "");
-      const parsed = parseReviewMarkdown(content);
-      setParsedReview(parsed);
+      void parseUploadedReview(String(reader.result ?? ""));
+    };
+
+    reader.readAsText(file);
+  }
+
+  async function parseUploadedReview(content: string) {
+    setParseError(null);
+    setIsParsingReview(true);
+
+    try {
+      const response = await fetch("/api/review/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      const data = (await response.json()) as ParsedReview & { error?: string };
+
+      if (!response.ok) {
+        setParseError(data.error ?? "Failed to parse review file");
+        return;
+      }
+
+      setParsedReview(data);
       setSkippedReview(false);
 
-      if (parsed.openQuestions.length > 0) {
+      if (data.openQuestions.length > 0) {
         setStep("open_questions");
         return;
       }
 
-      if (parsed.manualSteps.length > 0) {
+      if (data.manualSteps.length > 0) {
         setStep("manual_steps");
         return;
       }
 
       setStep("ready");
-    };
-
-    reader.readAsText(file);
+    } catch {
+      setParseError("Failed to parse review file");
+    } finally {
+      setIsParsingReview(false);
+    }
   }
 
   function handleSkipReview() {
@@ -178,11 +200,15 @@ export function ReviewGate({
           <input
             accept=".md,text/markdown"
             className="mt-2 block w-full text-sm text-[#6B7280]"
+            disabled={isParsingReview}
             id="review-upload"
             onChange={handleFileUpload}
             type="file"
           />
         </div>
+        {parseError ? (
+          <p className="text-sm text-destructive">{parseError}</p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <Button onClick={handleSkipReview} type="button" variant="outline">
             Skip review upload

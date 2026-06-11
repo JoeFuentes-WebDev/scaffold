@@ -1,8 +1,4 @@
-export interface ParsedReview {
-  rawContent: string;
-  openQuestions: string[];
-  manualSteps: string[];
-}
+import type { ParsedReview } from "@/lib/types";
 
 function extractSectionContent(content: string, headerPattern: RegExp): string {
   const lines = content.split("\n");

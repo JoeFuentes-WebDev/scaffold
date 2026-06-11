@@ -97,7 +97,32 @@ If build fails: do not delete the folder, do not push. Fix and rebuild first.
 
 ## Assumptions Made
 
-_(Cursor fills this in — audit results go here)_
+### Step 1 — Audit (`grep -r "from.*lib/review"`)
+
+| File | Layer violation? |
+|---|---|
+| `components/artifacts/ReviewGate.tsx` | **Yes** — imported `parseReviewMarkdown` directly |
+
+No service or API route files imported `@/lib/review`. Only one file existed under `/lib/review`: `parseReviewMarkdown.ts`.
+
+### Step 2–3 — Move and import updates
+
+- Moved `lib/review/parseReviewMarkdown.ts` → `lib/services/reviewParser.ts` (no logic changes)
+- Moved `ParsedReview` interface to `lib/types` so components import types only
+
+### Step 4 — Component layer violation fix
+
+`ReviewGate` previously parsed uploaded markdown client-side via `parseReviewMarkdown()`.
+
+Fix:
+- Added `POST /api/review/parse` with `ParseReviewSchema` (Zod)
+- Route calls `parseReviewMarkdown()` from `lib/services/reviewParser`
+- `ReviewGate` reads the file locally, sends content to the API, and uses the returned `ParsedReview`
+- Added parse error state and loading disable on file input
+
+### Step 5 — Cleanup
+
+- Deleted `lib/review/` after build passed.
 
 ## Open Questions
 

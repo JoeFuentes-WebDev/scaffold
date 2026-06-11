@@ -106,6 +106,10 @@ export const CheckUnlocksSchema = z.object({
   project_id: z.string().uuid(),
 });
 
+export const ParseReviewSchema = z.object({
+  content: z.string().min(1, "content is required"),
+});
+
 export function invalidRequestResponse(error: z.ZodError) {
   return NextResponse.json(
     { error: "Invalid request", details: error.flatten() },
