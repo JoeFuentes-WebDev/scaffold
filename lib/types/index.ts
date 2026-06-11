@@ -91,6 +91,26 @@ export interface ClaudeEvaluateResponse {
   domain_updates: Record<string, Record<string, unknown>>;
 }
 
+export interface UpdateProjectInput {
+  description: string;
+}
+
+export interface ProjectModel {
+  project: Project;
+  domains: Domain[];
+  rounds: Round[];
+}
+
+export interface CheckDomainUnlocksResult {
+  unlocked_domains: DomainName[];
+  documents_status: DomainStatus;
+}
+
+export interface UpdateProjectResult {
+  project: Project;
+  pending_domains: DomainName[];
+}
+
 export interface EvaluateResult {
   action: "follow_up" | "advance";
   round: Round | null;

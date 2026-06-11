@@ -1,5 +1,7 @@
 import type { Round } from "@/lib/types";
 
+import { summarizeRoundsForPrompt } from "@/lib/prompts/roundSummary";
+
 export function buildEvaluateAnswersSystemPrompt(domain: string): string {
   return `You are a senior software architect evaluating answers about a software project.
 
@@ -12,6 +14,7 @@ Rules:
 - Only ask follow-up questions if a gap is genuinely critical. Do not pad.
 - Maximum 2 follow-up questions per round.
 - domains_affected must list every domain whose understanding changed.
+- Be aggressive about listing domains_affected. If an answer touches deployment, engineering rules, domain model, scope, or any other domain even tangentially, include it. It is always better to unlock a domain early than to leave it locked when relevant context exists.
 - domain_updates must contain the structured knowledge to store — Claude owns the shape.
 - Return ONLY valid JSON. No preamble, no markdown, no explanation.
 
@@ -25,27 +28,6 @@ Return format:
     "tech_stack": { ... }
   }
 }`;
-}
-
-function summarizeAllRounds(rounds: Round[]): string {
-  if (rounds.length === 0) {
-    return "No previous rounds.";
-  }
-
-  return rounds
-    .map((round) => {
-      const questionsSummary = round.questions
-        .map((question) => {
-          const answerText = question.answer
-            ? `Answer: ${question.answer}`
-            : "Answer: (pending)";
-          return `- ${question.text}\n  ${answerText}`;
-        })
-        .join("\n");
-
-      return `Domain: ${round.domain_name}, Round ${round.round_number} (${round.status})\n${questionsSummary}`;
-    })
-    .join("\n\n");
 }
 
 export function buildEvaluateAnswersPrompt(
@@ -64,7 +46,7 @@ Project description: ${description}
 Current domain: ${domain}
 
 All rounds across all domains:
-${summarizeAllRounds(allRounds)}
+${summarizeRoundsForPrompt(allRounds)}
 
 Answers just submitted for the current round:
 ${currentAnswersText}

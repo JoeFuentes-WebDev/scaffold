@@ -118,6 +118,35 @@ export async function getPendingRoundForDomain(
   return data;
 }
 
+export async function getPendingRoundsForProject(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<Round[]> {
+  const { data, error } = await supabase
+    .from("rounds")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? [];
+}
+
+export async function deleteRound(
+  supabase: SupabaseClient,
+  roundId: string
+): Promise<void> {
+  const { error } = await supabase.from("rounds").delete().eq("id", roundId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export function mergeAnswersIntoQuestions(
   questions: RoundQuestion[],
   answers: { question_id: string; answer: string }[]

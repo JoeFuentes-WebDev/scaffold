@@ -13,6 +13,7 @@ import type { Domain, DomainName, DomainStatus } from "@/lib/types";
 interface ProjectShellProps {
   projectId: string;
   projectName: string;
+  projectDescription: string;
   domains: Domain[];
   userEmail?: string;
   userAvatarUrl?: string;
@@ -60,6 +61,7 @@ function renderDocumentsContent(documentsStatus: DomainStatus): React.ReactNode 
 export function ProjectShell({
   projectId,
   projectName,
+  projectDescription,
   domains: initialDomains,
   userEmail,
   userAvatarUrl,
@@ -104,6 +106,9 @@ export function ProjectShell({
   return (
     <div className="flex min-h-full flex-col bg-[#F8F9FA]">
       <AppHeader
+        onDescriptionUpdated={handleRefresh}
+        projectDescription={projectDescription}
+        projectId={projectId}
         projectName={projectName}
         userAvatarUrl={userAvatarUrl}
         userEmail={userEmail}

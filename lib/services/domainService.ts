@@ -1,20 +1,114 @@
+import { callClaude, parseClaudeJson } from "@/lib/claude/client";
 import {
   getDomainById,
+  getDomainByName,
   getDomainsForProject,
+  unlockDomain,
   updateDomainStatus,
 } from "@/lib/data/domains";
+import { getProjectById } from "@/lib/data/projects";
+import { getRoundsForProject } from "@/lib/data/rounds";
 import { getDocumentsTabStatus } from "@/lib/documents/status";
+import {
+  buildCheckUnlocksPrompt,
+  buildCheckUnlocksSystemPrompt,
+  type CheckUnlocksResponse,
+} from "@/lib/prompts/checkUnlocks";
 import { createClient } from "@/lib/supabase/server";
-import type { Domain, DomainStatus } from "@/lib/types";
+import type {
+  CheckDomainUnlocksResult,
+  Domain,
+  DomainName,
+  DomainStatus,
+} from "@/lib/types";
 
 export { getDocumentsTabStatus };
 
+function isValidDomainName(name: string): name is DomainName {
+  const validNames: DomainName[] = [
+    "product",
+    "scope",
+    "users",
+    "architecture",
+    "tech_stack",
+    "domain_model",
+    "engineering_rules",
+    "deployment",
+  ];
+
+  return validNames.includes(name as DomainName);
+}
+
+export async function checkDomainUnlocks(
+  projectId: string
+): Promise<CheckDomainUnlocksResult> {
+  const supabase = await createClient();
+  const project = await getProjectById(supabase, projectId);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const domains = await getDomainsForProject(supabase, projectId);
+  const lockedDomains = domains.filter((domain) => domain.status === "locked");
+
+  if (lockedDomains.length === 0) {
+    return {
+      unlocked_domains: [],
+      documents_status: getDocumentsTabStatus(domains),
+    };
+  }
+
+  const rounds = await getRoundsForProject(supabase, projectId);
+  const systemPrompt = buildCheckUnlocksSystemPrompt();
+  const userPrompt = buildCheckUnlocksPrompt({ project, domains, rounds });
+
+  let rawResponse: string;
+  try {
+    rawResponse = await callClaude(systemPrompt, userPrompt);
+  } catch (error) {
+    console.error("Claude check-unlocks error:", error);
+    throw new Error("Something went wrong checking domain unlocks. Please try again.");
+  }
+
+  let parsed: CheckUnlocksResponse;
+  try {
+    parsed = parseClaudeJson<CheckUnlocksResponse>(rawResponse);
+  } catch (error) {
+    console.error("Claude check-unlocks malformed JSON:", rawResponse);
+    throw new Error("Something went wrong checking domain unlocks. Please try again.");
+  }
+
+  const unlockedDomains: DomainName[] = [];
+
+  for (const domainName of parsed.domains_to_unlock ?? []) {
+    if (!isValidDomainName(domainName)) {
+      continue;
+    }
+
+    const domain = await getDomainByName(supabase, projectId, domainName);
+    if (!domain || domain.status !== "locked") {
+      continue;
+    }
+
+    await unlockDomain(supabase, projectId, domainName);
+    unlockedDomains.push(domainName);
+  }
+
+  const updatedDomains = await getDomainsForProject(supabase, projectId);
+
+  return {
+    unlocked_domains: unlockedDomains,
+    documents_status: getDocumentsTabStatus(updatedDomains),
+  };
+}
+
+/** @deprecated Use checkDomainUnlocks */
 export async function checkDocumentsUnlock(
   projectId: string
 ): Promise<DomainStatus> {
-  const supabase = await createClient();
-  const domains = await getDomainsForProject(supabase, projectId);
-  return getDocumentsTabStatus(domains);
+  const result = await checkDomainUnlocks(projectId);
+  return result.documents_status;
 }
 
 export async function setDomainStatus(

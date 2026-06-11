@@ -7,6 +7,7 @@ import { QuestionRound } from "@/components/project/QuestionRound";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { DOMAIN_DEFINITIONS } from "@/constants/domains";
 import type { Domain, EvaluateAnswerInput, Round } from "@/lib/types";
 
@@ -29,6 +30,14 @@ function getPendingRound(rounds: Round[]): Round | null {
   return rounds.find((round) => round.status === "pending") ?? null;
 }
 
+async function requestCheckDomainUnlocks(projectId: string): Promise<void> {
+  await fetch("/api/domains/check-unlocks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_id: projectId }),
+  });
+}
+
 export function DomainWorkspace({
   projectId,
   domain,
@@ -38,12 +47,19 @@ export function DomainWorkspace({
   const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [showClarifyForm, setShowClarifyForm] = useState(false);
+  const [clarificationText, setClarificationText] = useState("");
+  const [isSubmittingClarification, setIsSubmittingClarification] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const domainLabel = getDomainLabel(domain);
   const answeredRounds = getAnsweredRounds(rounds);
   const showStopHere =
+    domain.status === "in_progress" || domain.status === "complete";
+  const showClarifyButton =
     domain.status === "in_progress" || domain.status === "complete";
 
   async function loadRounds() {
@@ -160,6 +176,47 @@ export function DomainWorkspace({
     }
   }
 
+  async function handleRegenerateRound() {
+    if (!activeRound) {
+      return;
+    }
+
+    setError(null);
+    setIsRegenerating(true);
+
+    try {
+      const response = await fetch("/api/rounds/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          domain_name: domain.name,
+          round_id: activeRound.id,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        round?: Round;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setError(data.error ?? "Failed to regenerate questions");
+        return;
+      }
+
+      if (data.round) {
+        setActiveRound(data.round);
+        await loadRounds();
+        onRefresh();
+      }
+    } catch {
+      setError("Failed to regenerate questions");
+    } finally {
+      setIsRegenerating(false);
+    }
+  }
+
   async function handleStopHereChange(checked: boolean) {
     setError(null);
     setIsUpdatingStatus(true);
@@ -180,11 +237,65 @@ export function DomainWorkspace({
         return;
       }
 
+      await requestCheckDomainUnlocks(projectId);
       onRefresh();
     } catch {
       setError("Failed to update domain status");
     } finally {
       setIsUpdatingStatus(false);
+    }
+  }
+
+  function handleShowClarifyForm() {
+    setShowClarifyForm(true);
+    setClarificationText("");
+  }
+
+  function handleHideClarifyForm() {
+    setShowClarifyForm(false);
+    setClarificationText("");
+  }
+
+  function handleClarificationChange(
+    event: React.ChangeEvent<HTMLTextAreaElement>
+  ) {
+    setClarificationText(event.target.value);
+  }
+
+  async function handleSubmitClarification() {
+    if (!clarificationText.trim()) {
+      return;
+    }
+
+    setError(null);
+    setIsSubmittingClarification(true);
+
+    try {
+      const response = await fetch("/api/rounds/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          domain_name: domain.name,
+          clarification: clarificationText.trim(),
+        }),
+      });
+
+      const data = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setError(data.error ?? "Failed to save clarification");
+        return;
+      }
+
+      setShowClarifyForm(false);
+      setClarificationText("");
+      await loadRounds();
+      onRefresh();
+    } catch {
+      setError("Failed to save clarification");
+    } finally {
+      setIsSubmittingClarification(false);
     }
   }
 
@@ -219,6 +330,8 @@ export function DomainWorkspace({
         {activeRound ? (
           <QuestionRound
             isLoading={isEvaluating}
+            isRegenerating={isRegenerating}
+            onRegenerate={handleRegenerateRound}
             onSubmit={handleSubmitAnswers}
             round={activeRound}
           />
@@ -252,6 +365,53 @@ export function DomainWorkspace({
     );
   }
 
+  function renderClarifySection() {
+    if (!showClarifyButton) {
+      return null;
+    }
+
+    if (showClarifyForm) {
+      return (
+        <div className="space-y-3 border-t border-[#E5E7EB] pt-6">
+          <Label htmlFor={`clarify-${domain.id}`}>
+            What would you like to clarify?
+          </Label>
+          <Textarea
+            id={`clarify-${domain.id}`}
+            onChange={handleClarificationChange}
+            rows={3}
+            value={clarificationText}
+          />
+          <div className="flex gap-2">
+            <Button
+              disabled={isSubmittingClarification || !clarificationText.trim()}
+              onClick={handleSubmitClarification}
+              type="button"
+            >
+              {isSubmittingClarification ? "Saving..." : "Submit clarification"}
+            </Button>
+            <Button
+              disabled={isSubmittingClarification}
+              onClick={handleHideClarifyForm}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="border-t border-[#E5E7EB] pt-6">
+        <Button onClick={handleShowClarifyForm} type="button" variant="outline">
+          I need to clarify something
+        </Button>
+      </div>
+    );
+  }
+
   function renderContent() {
     if (domain.status === "available") {
       return renderAvailableState();
@@ -280,6 +440,8 @@ export function DomainWorkspace({
           <Label htmlFor={`stop-here-${domain.id}`}>Stop Here</Label>
         </div>
       ) : null}
+
+      {renderClarifySection()}
     </div>
   );
 }

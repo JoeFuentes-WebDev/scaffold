@@ -2,15 +2,27 @@
 
 import { useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { QuestionItem } from "@/components/project/QuestionItem";
+import { NA_ANSWER_SENTINEL } from "@/constants/answers";
 import type { EvaluateAnswerInput, Round } from "@/lib/types";
 
 interface QuestionRoundProps {
   round: Round;
   onSubmit: (answers: EvaluateAnswerInput[]) => void;
+  onRegenerate: () => void;
   isLoading: boolean;
+  isRegenerating: boolean;
 }
 
 function buildInitialAnswers(round: Round): Record<string, string> {
@@ -23,29 +35,82 @@ function buildInitialAnswers(round: Round): Record<string, string> {
   return initial;
 }
 
-function areAllAnswersFilled(
-  round: Round,
-  answers: Record<string, string>
-): boolean {
-  return round.questions.every((question) => answers[question.id]?.trim());
+function buildInitialNaState(round: Round): Record<string, boolean> {
+  const initial: Record<string, boolean> = {};
+
+  for (const question of round.questions) {
+    initial[question.id] = question.answer === NA_ANSWER_SENTINEL;
+  }
+
+  return initial;
 }
 
-export function QuestionRound({ round, onSubmit, isLoading }: QuestionRoundProps) {
+function isQuestionAnswered(
+  questionId: string,
+  answers: Record<string, string>,
+  naChecked: Record<string, boolean>
+): boolean {
+  if (naChecked[questionId]) {
+    return true;
+  }
+
+  return Boolean(answers[questionId]?.trim());
+}
+
+function areAllQuestionsAnswered(
+  round: Round,
+  answers: Record<string, string>,
+  naChecked: Record<string, boolean>
+): boolean {
+  return round.questions.every((question) =>
+    isQuestionAnswered(question.id, answers, naChecked)
+  );
+}
+
+export function QuestionRound({
+  round,
+  onSubmit,
+  onRegenerate,
+  isLoading,
+  isRegenerating,
+}: QuestionRoundProps) {
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     buildInitialAnswers(round)
   );
+  const [naChecked, setNaChecked] = useState<Record<string, boolean>>(() =>
+    buildInitialNaState(round)
+  );
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
 
   useEffect(() => {
     setAnswers(buildInitialAnswers(round));
+    setNaChecked(buildInitialNaState(round));
   }, [round.id]);
 
-  function handleAnswerChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
-    const questionId = event.target.name;
-    const value = event.target.value;
-
+  function handleAnswerChange(questionId: string, value: string) {
     setAnswers((previous) => ({
       ...previous,
       [questionId]: value,
+    }));
+  }
+
+  function handleNaChange(questionId: string, checked: boolean) {
+    setNaChecked((previous) => ({
+      ...previous,
+      [questionId]: checked,
+    }));
+
+    if (checked) {
+      setAnswers((previous) => ({
+        ...previous,
+        [questionId]: NA_ANSWER_SENTINEL,
+      }));
+      return;
+    }
+
+    setAnswers((previous) => ({
+      ...previous,
+      [questionId]: "",
     }));
   }
 
@@ -54,32 +119,80 @@ export function QuestionRound({ round, onSubmit, isLoading }: QuestionRoundProps
 
     const payload = round.questions.map((question) => ({
       question_id: question.id,
-      answer: answers[question.id]?.trim() ?? "",
+      answer: naChecked[question.id]
+        ? NA_ANSWER_SENTINEL
+        : answers[question.id]?.trim() ?? "",
     }));
 
     onSubmit(payload);
   }
 
-  const submitDisabled = isLoading || !areAllAnswersFilled(round, answers);
+  function handleRegenerateClick() {
+    setShowRegenerateDialog(true);
+  }
+
+  function handleRegenerateConfirm() {
+    setShowRegenerateDialog(false);
+    onRegenerate();
+  }
+
+  function handleRegenerateCancel() {
+    setShowRegenerateDialog(false);
+  }
+
+  const submitDisabled =
+    isLoading || !areAllQuestionsAnswered(round, answers, naChecked);
+  const showRegenerateButton = round.status === "pending";
 
   return (
-    <form className="space-y-6" onSubmit={handleSubmit}>
-      {round.questions.map((question) => (
-        <div className="space-y-2" key={question.id}>
-          <Label htmlFor={question.id}>{question.text}</Label>
-          <Textarea
-            disabled={isLoading}
-            id={question.id}
-            name={question.id}
-            onChange={handleAnswerChange}
-            rows={4}
-            value={answers[question.id] ?? ""}
+    <>
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        {round.questions.map((question) => (
+          <QuestionItem
+            answer={answers[question.id] ?? ""}
+            isLoading={isLoading}
+            isNa={naChecked[question.id] ?? false}
+            key={question.id}
+            onAnswerChange={handleAnswerChange}
+            onNaChange={handleNaChange}
+            question={question}
           />
+        ))}
+        <div className="flex flex-wrap gap-3">
+          <Button disabled={submitDisabled} type="submit">
+            {isLoading ? "Evaluating..." : "Submit Answers"}
+          </Button>
+          {showRegenerateButton ? (
+            <Button
+              disabled={isLoading || isRegenerating}
+              onClick={handleRegenerateClick}
+              type="button"
+              variant="outline"
+            >
+              {isRegenerating ? "Regenerating..." : "Regenerate questions"}
+            </Button>
+          ) : null}
         </div>
-      ))}
-      <Button disabled={submitDisabled} type="submit">
-        {isLoading ? "Evaluating..." : "Submit Answers"}
-      </Button>
-    </form>
+      </form>
+
+      <AlertDialog onOpenChange={setShowRegenerateDialog} open={showRegenerateDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate questions?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will discard the current questions and generate new ones.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleRegenerateCancel}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRegenerateConfirm}>
+              Regenerate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

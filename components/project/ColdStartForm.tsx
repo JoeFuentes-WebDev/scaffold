@@ -128,6 +128,11 @@ export function ColdStartForm() {
           rows={4}
           value={description}
         />
+        <p className="text-sm text-[#6B7280]">
+          The more specific you are, the sharper the first questions will be.
+          Include what the app does, who it&apos;s for, and any key technical
+          decisions you&apos;ve already made.
+        </p>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

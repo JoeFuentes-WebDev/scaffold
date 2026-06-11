@@ -10,6 +10,7 @@ import {
 import { getProjectById } from "@/lib/data/projects";
 import {
   createRound,
+  deleteRound,
   getPendingRoundForDomain,
   getRoundById,
   getRoundsForDomain,
@@ -33,6 +34,11 @@ import type {
   Round,
   RoundQuestion,
 } from "@/lib/types";
+
+import {
+  CLARIFICATION_QUESTION_ID,
+  CLARIFICATION_QUESTION_TEXT,
+} from "@/constants/answers";
 
 function getNextRoundNumber(existingRounds: Round[]): number {
   if (existingRounds.length === 0) {
@@ -66,16 +72,19 @@ async function applyDomainUpdates(
 export async function generateRound(
   supabase: SupabaseClient,
   projectId: string,
-  domainName: string
+  domainName: string,
+  options?: { forceRegenerate?: boolean }
 ): Promise<Round> {
-  const existingPending = await getPendingRoundForDomain(
-    supabase,
-    projectId,
-    domainName
-  );
+  if (!options?.forceRegenerate) {
+    const existingPending = await getPendingRoundForDomain(
+      supabase,
+      projectId,
+      domainName
+    );
 
-  if (existingPending) {
-    return existingPending;
+    if (existingPending) {
+      return existingPending;
+    }
   }
 
   const project = await getProjectById(supabase, projectId);
@@ -248,4 +257,58 @@ export async function getDomainRounds(
   domainName: string
 ): Promise<Round[]> {
   return getRoundsForDomain(supabase, projectId, domainName);
+}
+
+export async function regenerateRound(
+  supabase: SupabaseClient,
+  projectId: string,
+  domainName: string,
+  roundId: string
+): Promise<Round> {
+  const round = await getRoundById(supabase, roundId);
+
+  if (!round) {
+    throw new Error("Round not found");
+  }
+
+  if (round.status !== "pending") {
+    throw new Error("Only pending rounds can be regenerated");
+  }
+
+  if (round.project_id !== projectId || round.domain_name !== domainName) {
+    throw new Error("Round does not match project or domain");
+  }
+
+  await deleteRound(supabase, roundId);
+
+  return generateRound(supabase, projectId, domainName, {
+    forceRegenerate: true,
+  });
+}
+
+export async function createClarificationRound(
+  supabase: SupabaseClient,
+  projectId: string,
+  domainName: string,
+  clarificationText: string
+): Promise<Round> {
+  const domainRounds = await getRoundsForDomain(
+    supabase,
+    projectId,
+    domainName
+  );
+
+  return createRound(supabase, {
+    project_id: projectId,
+    domain_name: domainName,
+    round_number: getNextRoundNumber(domainRounds),
+    status: "answered",
+    questions: [
+      {
+        id: CLARIFICATION_QUESTION_ID,
+        text: CLARIFICATION_QUESTION_TEXT,
+        answer: clarificationText,
+      },
+    ],
+  });
 }

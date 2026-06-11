@@ -126,7 +126,12 @@ Call this endpoint after every Stop Here toggle.
 
 ## Assumptions Made
 
-_(Cursor fills this in as it builds)_
+- `checkDocumentsUnlock` renamed to `checkDomainUnlocks` (old name kept as deprecated alias). Documents status is computed as part of the unlock check result.
+- Clarification rounds stored as immediately-answered rounds with a sentinel question id (`clarification`) — no schema migration needed.
+- `POST /api/projects/[id]/regenerate-pending` added as a sub-route for the Yes/No regenerate flow after description edit.
+- `AnsweredRoundSummary` converted to a controlled client component with chevron toggle for reliable expand/collapse.
+- N/A sentinel value: `"N/A — not applicable"` in `constants/answers.ts`.
+- Shared round summarization extracted to `lib/prompts/roundSummary.ts` for generate, evaluate, and check-unlocks prompts.
 
 ## Open Questions
 

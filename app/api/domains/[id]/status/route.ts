@@ -1,7 +1,7 @@
 import { getDomainById } from "@/lib/data/domains";
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
 import {
-  checkDocumentsUnlock,
+  checkDomainUnlocks,
   setDomainStatus,
 } from "@/lib/services/domainService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
@@ -68,11 +68,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   try {
     const updatedDomain = await setDomainStatus(id, body.status!);
-    const documentsStatus = await checkDocumentsUnlock(domain.project_id);
+    const unlockResult = await checkDomainUnlocks(domain.project_id);
 
     return NextResponse.json({
       domain: updatedDomain,
-      documents_status: documentsStatus,
+      documents_status: unlockResult.documents_status,
+      unlocked_domains: unlockResult.unlocked_domains,
     });
   } catch (error) {
     const message =

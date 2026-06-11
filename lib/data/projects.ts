@@ -78,3 +78,22 @@ export async function getProjectById(
 
   return data;
 }
+
+export async function updateProject(
+  supabase: SupabaseClient,
+  projectId: string,
+  data: { description: string }
+): Promise<Project> {
+  const { data: project, error } = await supabase
+    .from("projects")
+    .update({ description: data.description })
+    .eq("id", projectId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return project;
+}
