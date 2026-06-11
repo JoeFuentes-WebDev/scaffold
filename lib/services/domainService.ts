@@ -8,7 +8,7 @@ import {
 } from "@/lib/data/domains";
 import { getProjectById } from "@/lib/data/projects";
 import { getRoundsForProject } from "@/lib/data/rounds";
-import { getDocumentsTabStatus } from "@/lib/documents/status";
+import { getDocumentsTabStatus } from "@/lib/services/domainStatus";
 import {
   buildCheckUnlocksPrompt,
   buildCheckUnlocksSystemPrompt,
@@ -21,8 +21,6 @@ import type {
   DomainName,
   DomainStatus,
 } from "@/lib/types";
-
-export { getDocumentsTabStatus };
 
 function isValidDomainName(name: string): name is DomainName {
   const validNames: DomainName[] = [

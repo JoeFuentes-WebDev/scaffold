@@ -11,7 +11,11 @@ import {
 } from "@/lib/services/artifactNaming";
 import { streamClaude } from "@/lib/claude/client";
 import { getArtifactByType, getArtifactsForProject, upsertArtifact } from "@/lib/data/artifacts";
-import { getMissingDomainsForArtifact } from "@/lib/documents/thresholds";
+import { getDomainsForProject } from "@/lib/data/domains";
+import {
+  formatDomainList,
+  getMissingDomainsForArtifact,
+} from "@/lib/services/domainThresholds";
 import {
   buildEnvManifestSystemPrompt,
   buildEnvManifestUserPrompt,
@@ -29,10 +33,12 @@ import {
   buildReviewUserPrompt,
 } from "@/lib/prompts/artifacts/review";
 import { assembleProjectModel } from "@/lib/services/projectModelService";
+import { ARTIFACT_DEFINITIONS } from "@/constants/artifacts";
 import type {
   Artifact,
   ArtifactsWorkspaceUi,
   ArtifactType,
+  Domain,
   DomainName,
   MilestoneReviewContext,
   StreamArtifactOptions,
@@ -176,8 +182,29 @@ function getArtifactForType(
   return artifacts.find((item) => item.artifact_type === artifactType) ?? null;
 }
 
+function buildArtifactThresholds(
+  domains: Domain[]
+): ArtifactsWorkspaceUi["artifactThresholds"] {
+  const thresholds = {} as ArtifactsWorkspaceUi["artifactThresholds"];
+
+  for (const definition of ARTIFACT_DEFINITIONS) {
+    const missingDomains = getMissingDomainsForArtifact(
+      domains,
+      definition.type
+    );
+
+    thresholds[definition.type] = {
+      isReady: missingDomains.length === 0,
+      missingLabel: formatDomainList(missingDomains),
+    };
+  }
+
+  return thresholds;
+}
+
 export function buildArtifactsWorkspaceUi(
-  artifacts: Artifact[]
+  artifacts: Artifact[],
+  domains: Domain[]
 ): ArtifactsWorkspaceUi {
   const milestoneArtifact = getArtifactForType(artifacts, "milestone");
   const reviewArtifact = getArtifactForType(artifacts, "review");
@@ -198,6 +225,7 @@ export function buildArtifactsWorkspaceUi(
       review: reviewNaming,
       env_manifest: getArtifactNaming("env_manifest", 1),
     },
+    artifactThresholds: buildArtifactThresholds(domains),
   };
 }
 
@@ -212,11 +240,14 @@ export async function getArtifactsWorkspaceForProject(
   supabase: SupabaseClient,
   projectId: string
 ): Promise<{ artifacts: Artifact[]; workspace: ArtifactsWorkspaceUi }> {
-  const artifacts = await getArtifactsForProject(supabase, projectId);
+  const [artifacts, domains] = await Promise.all([
+    getArtifactsForProject(supabase, projectId),
+    getDomainsForProject(supabase, projectId),
+  ]);
 
   return {
     artifacts,
-    workspace: buildArtifactsWorkspaceUi(artifacts),
+    workspace: buildArtifactsWorkspaceUi(artifacts, domains),
   };
 }
 

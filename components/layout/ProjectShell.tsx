@@ -8,7 +8,6 @@ import { DomainSidebar } from "@/components/layout/DomainSidebar";
 import { DomainWorkspace } from "@/components/project/DomainWorkspace";
 import { DocumentsWorkspace } from "@/components/artifacts/DocumentsWorkspace";
 import { DOMAIN_DEFINITIONS } from "@/constants/domains";
-import { getDocumentsTabStatus } from "@/lib/documents/status";
 import type { Domain, DomainName, DomainStatus } from "@/lib/types";
 
 interface ProjectShellProps {
@@ -16,6 +15,7 @@ interface ProjectShellProps {
   projectName: string;
   projectDescription: string;
   domains: Domain[];
+  documentsStatus: DomainStatus;
   userEmail?: string;
   userAvatarUrl?: string;
 }
@@ -44,8 +44,7 @@ function getActiveDomain(
 
 function renderDocumentsContent(
   documentsStatus: DomainStatus,
-  projectId: string,
-  domains: Domain[]
+  projectId: string
 ): React.ReactNode {
   if (documentsStatus === "locked") {
     return (
@@ -56,7 +55,7 @@ function renderDocumentsContent(
     );
   }
 
-  return <DocumentsWorkspace domains={domains} projectId={projectId} />;
+  return <DocumentsWorkspace projectId={projectId} refreshKey={documentsStatus} />;
 }
 
 export function ProjectShell({
@@ -64,18 +63,20 @@ export function ProjectShell({
   projectName,
   projectDescription,
   domains: initialDomains,
+  documentsStatus: initialDocumentsStatus,
   userEmail,
   userAvatarUrl,
 }: ProjectShellProps) {
   const router = useRouter();
   const [domains, setDomains] = useState(initialDomains);
+  const [documentsStatus, setDocumentsStatus] = useState(initialDocumentsStatus);
   const [activeTab, setActiveTab] = useState<ActiveTab>("product");
 
   useEffect(() => {
     setDomains(initialDomains);
-  }, [initialDomains]);
+    setDocumentsStatus(initialDocumentsStatus);
+  }, [initialDomains, initialDocumentsStatus]);
 
-  const documentsStatus = getDocumentsTabStatus(domains);
   const activeDomain = getActiveDomain(domains, activeTab);
 
   function handleTabSelect(tab: ActiveTab) {
@@ -88,7 +89,7 @@ export function ProjectShell({
 
   function renderMainContent() {
     if (activeTab === "documents") {
-      return renderDocumentsContent(documentsStatus, projectId, domains);
+      return renderDocumentsContent(documentsStatus, projectId);
     }
 
     if (!activeDomain) {

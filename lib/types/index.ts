@@ -35,11 +35,17 @@ export interface Artifact {
   updated_at: string;
 }
 
+export interface ArtifactThresholdUi {
+  isReady: boolean;
+  missingLabel: string;
+}
+
 export interface ArtifactsWorkspaceUi {
   canGenerateNextMilestone: boolean;
   milestoneSequenceNumber: number;
   nextMilestoneDisplayName: string;
   rowNaming: Record<ArtifactType, { displayName: string; filename: string }>;
+  artifactThresholds: Record<ArtifactType, ArtifactThresholdUi>;
 }
 
 export interface GenerateArtifactInput {

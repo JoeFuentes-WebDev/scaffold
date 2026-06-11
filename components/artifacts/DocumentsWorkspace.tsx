@@ -13,27 +13,30 @@ import {
   ARTIFACT_DEFINITIONS,
   getArtifactFilename,
 } from "@/constants/artifacts";
-import {
-  formatDomainList,
-  getMissingDomainsForArtifact,
-  isArtifactReady,
-} from "@/lib/documents/thresholds";
 import type {
   Artifact,
   ArtifactsWorkspaceUi,
   ArtifactType,
-  Domain,
 } from "@/lib/types";
 
 interface DocumentsWorkspaceProps {
   projectId: string;
-  domains: Domain[];
+  refreshKey: string;
 }
 
 interface GenerateOptions {
   regenerate?: boolean;
   nextMilestone?: boolean;
   reviewContext?: ReviewGateResult;
+}
+
+function buildDefaultArtifactThresholds(): ArtifactsWorkspaceUi["artifactThresholds"] {
+  return {
+    onboarding: { isReady: false, missingLabel: "" },
+    milestone: { isReady: false, missingLabel: "" },
+    review: { isReady: false, missingLabel: "" },
+    env_manifest: { isReady: false, missingLabel: "" },
+  };
 }
 
 function buildDefaultWorkspaceUi(): ArtifactsWorkspaceUi {
@@ -59,6 +62,7 @@ function buildDefaultWorkspaceUi(): ArtifactsWorkspaceUi {
         filename: getArtifactFilename("env_manifest", 1),
       },
     },
+    artifactThresholds: buildDefaultArtifactThresholds(),
   };
 }
 
@@ -88,7 +92,7 @@ function hasGeneratedContent(artifact: Artifact | null): boolean {
 
 export function DocumentsWorkspace({
   projectId,
-  domains,
+  refreshKey,
 }: DocumentsWorkspaceProps) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [workspaceUi, setWorkspaceUi] = useState<ArtifactsWorkspaceUi>(
@@ -123,7 +127,7 @@ export function DocumentsWorkspace({
 
   useEffect(() => {
     void loadArtifacts();
-  }, [projectId]);
+  }, [projectId, refreshKey]);
 
   const generatedArtifacts = artifacts.filter((artifact) =>
     hasGeneratedContent(artifact)
@@ -315,7 +319,7 @@ export function DocumentsWorkspace({
       return null;
     }
 
-    if (!isArtifactReady(domains, "milestone")) {
+    if (!workspaceUi.artifactThresholds.milestone.isReady) {
       return null;
     }
 
@@ -336,10 +340,7 @@ export function DocumentsWorkspace({
     const artifactType = definition.type;
     const artifact = getArtifactForType(artifacts, artifactType);
     const naming = getRowNaming(artifactType);
-    const isReady = isArtifactReady(domains, artifactType);
-    const missingLabel = formatDomainList(
-      getMissingDomainsForArtifact(domains, artifactType)
-    );
+    const threshold = workspaceUi.artifactThresholds[artifactType];
     const generated = hasGeneratedContent(artifact);
     const generateLabel =
       artifactType === "milestone" && !generated
@@ -359,9 +360,9 @@ export function DocumentsWorkspace({
           isExpanded={expandedType === artifactType}
           isGenerating={generatingType === artifactType}
           isPartial={artifact?.status === "partial"}
-          isReady={isReady}
+          isReady={threshold.isReady}
           isStreaming={generatingType === artifactType}
-          missingLabel={missingLabel}
+          missingLabel={threshold.missingLabel}
           onDownload={() => handleDownload(artifactType)}
           onGenerate={getGenerateHandler(artifactType)}
           onRegenerate={getRegenerateHandler(artifactType)}

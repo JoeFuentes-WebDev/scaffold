@@ -1,4 +1,5 @@
 import { ProjectShell } from "@/components/layout/ProjectShell";
+import { getDocumentsTabStatus } from "@/lib/services/domainStatus";
 import { getProjectWithDomains } from "@/lib/services/projectService";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
@@ -30,6 +31,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <ProjectShell
+      documentsStatus={getDocumentsTabStatus(result.domains)}
       domains={result.domains}
       projectDescription={result.project.description ?? ""}
       projectId={result.project.id}
