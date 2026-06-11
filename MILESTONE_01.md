@@ -426,7 +426,12 @@ Show a simple list of project cards. Each card: name, created date, status. Clic
 
 ## Assumptions Made
 
-_(Cursor fills this in as it builds)_
+- OAuth `redirectTo` uses `/callback` (not `/auth/callback` from the login spec) because the `(auth)` route group does not add a URL segment — callback route is at `/callback`.
+- Supabase server client uses `await cookies()` per Next.js 15+ async dynamic APIs.
+- Auth middleware added to protect `/dashboard` and `/projects/*` and redirect authenticated users away from `/login` and `/callback`.
+- Documents tab is UI-only for M1 (not a row in `domains` table); sidebar renders it with static `available` status.
+- Schema SQL saved to `supabase/migrations/001_initial_schema.sql` — developer runs it manually in the Supabase SQL editor.
+- Server Components fetch data via `/lib/services` (never Supabase directly); services delegate queries to `/lib/data`.
 
 ## Open Questions
 

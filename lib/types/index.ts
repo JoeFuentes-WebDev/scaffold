@@ -1,0 +1,52 @@
+export type ProjectType = "new" | "existing";
+
+export type ProjectStatus = "active" | "archived";
+
+export type DomainName =
+  | "product"
+  | "scope"
+  | "users"
+  | "architecture"
+  | "tech_stack"
+  | "domain_model"
+  | "engineering_rules"
+  | "deployment";
+
+export type DomainStatus = "locked" | "available" | "in_progress" | "complete";
+
+export type RoundStatus = "pending" | "answered" | "complete";
+
+export type ArtifactType =
+  | "onboarding"
+  | "milestone"
+  | "review"
+  | "env_manifest";
+
+export type ArtifactStatus = "pending" | "generated";
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  project_type: ProjectType;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Domain {
+  id: string;
+  project_id: string;
+  name: DomainName;
+  status: DomainStatus;
+  data: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description: string;
+  project_type?: ProjectType;
+}
