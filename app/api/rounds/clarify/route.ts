@@ -5,6 +5,7 @@ import {
   ClarifyRoundSchema,
   invalidRequestResponse,
 } from "@/lib/schemas";
+import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -43,8 +44,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ round });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to save clarification";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(
+      error,
+      "POST /api/rounds/clarify",
+      "Failed to save clarification. Please try again."
+    );
   }
 }

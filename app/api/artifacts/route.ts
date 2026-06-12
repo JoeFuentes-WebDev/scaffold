@@ -5,6 +5,7 @@ import {
   invalidRequestResponse,
   ProjectIdQuerySchema,
 } from "@/lib/schemas";
+import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -40,8 +41,10 @@ export async function GET(request: Request) {
     );
     return NextResponse.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch artifacts";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(
+      error,
+      "GET /api/artifacts",
+      "Failed to load artifacts. Please try again."
+    );
   }
 }

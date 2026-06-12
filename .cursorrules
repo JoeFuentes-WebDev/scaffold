@@ -54,3 +54,9 @@ If you encounter a decision not covered by the active milestone:
 After any migration file is generated, stop and explicitly surface it as:
 "MANUAL STEP REQUIRED: run `npx supabase db push` before testing."
 Put it at the top of the completion summary, not the bottom.
+
+## API routes
+- Every API route must have a top-level try/catch wrapping the entire handler body
+- All catch blocks must use handleRouteError (from @/lib/utils/routeError) — never return error.message directly
+- Streaming routes use logRouteError for the same reason
+- No route is complete without a catch block — flag as Open Question if the correct fallback message is unclear

@@ -9,6 +9,7 @@ import {
   invalidRequestResponse,
   UpdateDomainStatusSchema,
 } from "@/lib/schemas";
+import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 interface RouteParams {
@@ -56,8 +57,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       unlocked_domains: unlockResult.unlocked_domains,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to update domain status";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(
+      error,
+      "PATCH /api/domains/[id]/status",
+      "Failed to update domain status. Please try again."
+    );
   }
 }

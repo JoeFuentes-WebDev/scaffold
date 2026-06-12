@@ -5,6 +5,7 @@ import {
   GenerateRoundSchema,
   invalidRequestResponse,
 } from "@/lib/schemas";
+import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -42,12 +43,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ round });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Something went wrong generating questions. Please try again.";
-
-    console.error("Generate round error:", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(
+      error,
+      "POST /api/rounds/generate",
+      "Something went wrong generating questions. Please try again."
+    );
   }
 }

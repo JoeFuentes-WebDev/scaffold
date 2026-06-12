@@ -83,7 +83,7 @@ describe("POST /api/projects", () => {
     expect(createProject).not.toHaveBeenCalled();
   });
 
-  it("returns 500 with service error message when service throws", async () => {
+  it("returns 500 without exposing internal error message", async () => {
     createProject.mockRejectedValue(new Error("DB connection failed"));
 
     const request = new Request("http://localhost/api/projects", {
@@ -103,6 +103,7 @@ describe("POST /api/projects", () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.error).toBe("DB connection failed");
+    expect(body.error).not.toContain("DB connection failed");
+    expect(body.error).toMatch(/please try again/i);
   });
 });

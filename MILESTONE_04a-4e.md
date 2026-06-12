@@ -272,7 +272,7 @@ npm run build
 - Service: `createProject(user.id, parsed data)`
 - Success: 200 with `{ project_id }`
 - Validation failure: 400 via `invalidRequestResponse` (`{ error: "Invalid request", details }`)
-- Service error: 500 with `{ error: message }` (returns `error.message` verbatim)
+- Service error: 500 with sanitized fallback via `handleRouteError` (updated in M4a-5)
 
 **POST /api/rounds/generate**
 - Validates: `GenerateRoundSchema` (uuid project_id, domain_name enum)
@@ -295,7 +295,7 @@ npm run build
 
 - **Projects auth:** Mocks `@/lib/supabase/server` `createClient` (route uses it directly, not `getAuthenticatedSupabase`).
 - **Rounds/generate response:** Assert `body.round.questions`, not `body.questions`.
-- **Projects service error:** Route returns `error.message` on 500; test asserts that message is exposed (milestone example expected sanitization, but that is not how the route behaves).
+- **Projects service error:** Route uses `handleRouteError`; test asserts internal message is not exposed (M4a-5).
 - **Artifacts threshold:** Error text is `"Required domains are not complete"`; test asserts `missing_domains` array rather than `body.error` containing `"missing"`.
 - **Artifacts threshold mock:** Mocks `validateArtifactGeneration` directly instead of `getDomainsForProject`.
 

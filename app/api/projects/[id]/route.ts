@@ -5,6 +5,7 @@ import {
   invalidRequestResponse,
   UpdateProjectSchema,
 } from "@/lib/schemas";
+import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 interface RouteParams {
@@ -45,8 +46,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     return NextResponse.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to update project";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(
+      error,
+      "PATCH /api/projects/[id]",
+      "Failed to update project. Please try again."
+    );
   }
 }

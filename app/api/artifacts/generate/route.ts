@@ -9,6 +9,7 @@ import {
   GenerateArtifactSchema,
   invalidRequestResponse,
 } from "@/lib/schemas";
+import { logRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
 
 function mapReviewContext(
@@ -88,13 +89,12 @@ export async function POST(request: Request) {
         );
         controller.close();
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Something went wrong generating this artifact. Please try again.";
-
-        console.error("Artifact stream error:", error);
-        controller.error(new Error(message));
+        logRouteError(error, "POST /api/artifacts/generate");
+        controller.error(
+          new Error(
+            "Something went wrong generating this artifact. Please try again."
+          )
+        );
       }
     },
   });
