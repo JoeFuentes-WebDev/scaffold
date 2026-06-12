@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Project, Round } from "@/lib/types";
+import type { Domain, Project, Round } from "@/lib/types";
 
 const {
   callClaude,
@@ -9,31 +9,42 @@ const {
   getDomainByName,
   getPendingRoundForDomain,
   getProjectById,
+  getRoundById,
   getRoundsForDomain,
   getRoundsForProject,
+  unlockDomain,
+  updateDomainData,
   updateDomainStatus,
+  updateRound,
 } = vi.hoisted(() => ({
   getPendingRoundForDomain: vi.fn(),
   getProjectById: vi.fn(),
   getRoundsForProject: vi.fn(),
   getRoundsForDomain: vi.fn(),
+  getRoundById: vi.fn(),
   createRound: vi.fn(),
+  updateRound: vi.fn(),
   getDomainByName: vi.fn(),
   updateDomainStatus: vi.fn(),
+  updateDomainData: vi.fn(),
+  unlockDomain: vi.fn(),
   callClaude: vi.fn(),
 }));
 
-vi.mock("@/lib/data/rounds", () => ({
-  createRound,
-  deleteRound: vi.fn(),
-  getPendingRoundForDomain,
-  getPendingRoundsForProject: vi.fn(),
-  getRoundById: vi.fn(),
-  getRoundsForDomain,
-  getRoundsForProject,
-  mergeAnswersIntoQuestions: vi.fn(),
-  updateRound: vi.fn(),
-}));
+vi.mock("@/lib/data/rounds", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/data/rounds")>();
+  return {
+    ...actual,
+    createRound,
+    deleteRound: vi.fn(),
+    getPendingRoundForDomain,
+    getPendingRoundsForProject: vi.fn(),
+    getRoundById,
+    getRoundsForDomain,
+    getRoundsForProject,
+    updateRound,
+  };
+});
 
 vi.mock("@/lib/data/projects", () => ({
   getProjectById,
@@ -49,8 +60,8 @@ vi.mock("@/lib/data/domains", () => ({
   getDomainsByProjectId: vi.fn(),
   getDomainsForProject: vi.fn(),
   isValidDomainName: vi.fn(),
-  unlockDomain: vi.fn(),
-  updateDomainData: vi.fn(),
+  unlockDomain,
+  updateDomainData,
   updateDomainStatus,
 }));
 
@@ -62,10 +73,11 @@ vi.mock("@/lib/claude/client", async (importOriginal) => {
   };
 });
 
-import { generateRound } from "@/lib/services/roundService";
+import { evaluateRound, generateRound } from "@/lib/services/roundService";
 
 const mockSupabase = {} as SupabaseClient;
 const projectId = "123e4567-e89b-12d3-a456-426614174000";
+const roundId = "123e4567-e89b-12d3-a456-426614174002";
 
 const mockProject: Project = {
   id: projectId,
@@ -79,10 +91,21 @@ const mockProject: Project = {
 };
 
 const mockQuestions = [{ id: "q1", text: "What does it do?" }];
+const mockAnswers = [{ question_id: "q1", answer: "A todo app for developers" }];
+
+const architectureDomain: Domain = {
+  id: "123e4567-e89b-12d3-a456-426614174003",
+  project_id: projectId,
+  name: "architecture",
+  status: "locked",
+  data: {},
+  created_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-01-01T00:00:00.000Z",
+};
 
 function makeRound(overrides: Partial<Round> = {}): Round {
   return {
-    id: "123e4567-e89b-12d3-a456-426614174002",
+    id: roundId,
     project_id: projectId,
     domain_name: "product",
     round_number: 1,
@@ -93,6 +116,17 @@ function makeRound(overrides: Partial<Round> = {}): Round {
     updated_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
+}
+
+function setupEvaluateBaseMocks(currentRound = makeRound()) {
+  getProjectById.mockResolvedValue(mockProject);
+  getRoundById.mockResolvedValue(currentRound);
+  updateRound.mockResolvedValue({ ...currentRound, status: "answered" });
+  getRoundsForProject.mockResolvedValue([currentRound]);
+  getDomainByName.mockResolvedValue(null);
+  updateDomainData.mockResolvedValue(architectureDomain);
+  unlockDomain.mockResolvedValue(undefined);
+  updateDomainStatus.mockResolvedValue(architectureDomain);
 }
 
 describe("generateRound", () => {
@@ -157,5 +191,140 @@ describe("generateRound", () => {
 
     expect(callClaude).not.toHaveBeenCalled();
     expect(createRound).not.toHaveBeenCalled();
+  });
+});
+
+describe("evaluateRound", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("evaluates answers and returns advance action", async () => {
+    setupEvaluateBaseMocks();
+    callClaude.mockResolvedValue(
+      JSON.stringify({
+        action: "advance",
+        domains_affected: ["architecture"],
+        domain_updates: {
+          architecture: { pattern: "monolith" },
+        },
+      })
+    );
+    getDomainByName.mockResolvedValue(architectureDomain);
+
+    const result = await evaluateRound(
+      mockSupabase,
+      projectId,
+      "product",
+      roundId,
+      mockAnswers
+    );
+
+    expect(result.action).toBe("advance");
+    expect(result.round).toBeNull();
+    expect(result.domains_affected).toContain("architecture");
+    expect(updateRound).toHaveBeenCalledOnce();
+  });
+
+  it("evaluates answers and returns follow_up with new questions", async () => {
+    setupEvaluateBaseMocks();
+    const followUpQuestions = [{ id: "q2", text: "Who is the primary user?" }];
+    callClaude.mockResolvedValue(
+      JSON.stringify({
+        action: "follow_up",
+        follow_up_questions: followUpQuestions,
+        domains_affected: [],
+        domain_updates: {},
+      })
+    );
+    getRoundsForDomain.mockResolvedValue([makeRound()]);
+    createRound.mockResolvedValue(
+      makeRound({
+        id: "123e4567-e89b-12d3-a456-426614174004",
+        round_number: 2,
+        questions: followUpQuestions.map((question) => ({
+          ...question,
+          follow_up: true,
+        })),
+      })
+    );
+
+    const result = await evaluateRound(
+      mockSupabase,
+      projectId,
+      "product",
+      roundId,
+      mockAnswers
+    );
+
+    expect(result.action).toBe("follow_up");
+    expect(result.round).toBeDefined();
+    expect(result.round?.questions).toHaveLength(1);
+    expect(createRound).toHaveBeenCalledOnce();
+  });
+
+  it("applies domain updates to affected domains on advance", async () => {
+    setupEvaluateBaseMocks();
+    const architectureUpdates = { pattern: "monolith", database: "postgres" };
+    callClaude.mockResolvedValue(
+      JSON.stringify({
+        action: "advance",
+        domains_affected: ["architecture"],
+        domain_updates: {
+          architecture: architectureUpdates,
+        },
+      })
+    );
+    getDomainByName.mockResolvedValue(architectureDomain);
+
+    await evaluateRound(
+      mockSupabase,
+      projectId,
+      "product",
+      roundId,
+      mockAnswers
+    );
+
+    expect(updateDomainData).toHaveBeenCalledWith(
+      mockSupabase,
+      architectureDomain.id,
+      architectureUpdates
+    );
+    expect(unlockDomain).toHaveBeenCalledWith(
+      mockSupabase,
+      projectId,
+      "architecture"
+    );
+  });
+
+  it("throws when Claude returns malformed JSON", async () => {
+    setupEvaluateBaseMocks();
+    callClaude.mockResolvedValue("not valid json {{{");
+
+    await expect(
+      evaluateRound(mockSupabase, projectId, "product", roundId, mockAnswers)
+    ).rejects.toThrow(
+      "Something went wrong evaluating answers. Please try again."
+    );
+
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it("throws when round does not exist", async () => {
+    getProjectById.mockResolvedValue(mockProject);
+    getRoundById.mockResolvedValue(null);
+
+    await expect(
+      evaluateRound(
+        mockSupabase,
+        projectId,
+        "product",
+        "non-existent-id",
+        mockAnswers
+      )
+    ).rejects.toThrow("Round not found");
+
+    expect(callClaude).not.toHaveBeenCalled();
+    expect(updateRound).not.toHaveBeenCalled();
   });
 });
