@@ -6,11 +6,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { NA_ANSWER_SENTINEL } from "@/constants/answers";
 import type { SuggestOption } from "@/lib/types";
@@ -120,28 +115,29 @@ export function QuestionItem({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3">
         <Label
-          className={isNa ? "text-[#9CA3AF]" : undefined}
+          className={`min-w-0 flex-1 leading-snug ${isNa ? "text-[#9CA3AF]" : "text-[#111827]"}`}
           htmlFor={question.id}
         >
           {question.text}
         </Label>
         <div className="flex shrink-0 items-center gap-2">
-          <Tooltip open={showCopiedTooltip}>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label="Copy question"
-                onClick={handleCopyClick}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <ClipboardIcon className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Copied!</TooltipContent>
-          </Tooltip>
+          <div className="flex items-center gap-1">
+            <Button
+              aria-label="Copy question"
+              className="text-[#374151]"
+              onClick={handleCopyClick}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <ClipboardIcon className="size-4" />
+            </Button>
+            {showCopiedTooltip ? (
+              <span className="text-xs font-medium text-[#6B7280]">Copied!</span>
+            ) : null}
+          </div>
           <Checkbox
             checked={isNa}
             disabled={isLoading}

@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { ClipboardIcon } from "lucide-react";
 import { QuestionItem } from "@/components/project/QuestionItem";
 import { NA_ANSWER_SENTINEL } from "@/constants/answers";
 import type { DomainName, EvaluateAnswerInput, Round, SuggestOption } from "@/lib/types";
@@ -105,6 +106,7 @@ export function QuestionRound({
   );
   const [isSuggestingOptions, setIsSuggestingOptions] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [showCopiedAll, setShowCopiedAll] = useState(false);
 
   function buildInitialAnswersForRound() {
     return buildInitialAnswers(round);
@@ -123,6 +125,20 @@ export function QuestionRound({
   }
 
   useEffect(syncRoundStateFromProps, [round.id]);
+
+  useEffect(function dismissCopiedAllConfirmation() {
+    if (!showCopiedAll) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(function hideCopiedAllConfirmation() {
+      setShowCopiedAll(false);
+    }, 200);
+
+    return function cleanupCopiedAllConfirmation() {
+      window.clearTimeout(timer);
+    };
+  }, [showCopiedAll]);
 
   function handleAnswerChange(questionId: string, value: string) {
     function applyAnswerUpdate(previous: Record<string, string>) {
@@ -181,6 +197,7 @@ export function QuestionRound({
   async function handleCopyAllQuestions() {
     const numberedList = buildNumberedQuestionList(round.questions);
     await navigator.clipboard.writeText(numberedList);
+    setShowCopiedAll(true);
   }
 
   async function handleRequestOptions(questionId: string, questionText: string) {
@@ -300,15 +317,19 @@ export function QuestionRound({
     <>
       <form className="space-y-6" onSubmit={handleSubmit}>
         {round.questions.length > 0 ? (
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
             <Button
               onClick={handleCopyAllQuestions}
               size="sm"
               type="button"
-              variant="ghost"
+              variant="outline"
             >
+              <ClipboardIcon className="size-4" />
               Copy all questions
             </Button>
+            {showCopiedAll ? (
+              <span className="text-xs font-medium text-[#6B7280]">Copied!</span>
+            ) : null}
           </div>
         ) : null}
         {optionsError ? (
