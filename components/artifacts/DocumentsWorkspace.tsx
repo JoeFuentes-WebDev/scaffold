@@ -122,6 +122,12 @@ function getReviewTemplateLabel(
   return `Template — give to Cursor to complete after ${milestoneDisplayName}`;
 }
 
+function getMilestoneProgressionLabel(sequenceNumber: number): string {
+  return `MILESTONE_${String(sequenceNumber).padStart(2, "0")}`;
+}
+
+type MilestoneProgressionStep = "idle" | "upload" | "generate" | "gate";
+
 export function DocumentsWorkspace({
   projectId,
   refreshKey,
@@ -135,10 +141,8 @@ export function DocumentsWorkspace({
     null
   );
   const [streamingContent, setStreamingContent] = useState("");
-  const [showReviewGate, setShowReviewGate] = useState(false);
-  const [showProgressionUpload, setShowProgressionUpload] = useState(false);
-  const [progressionUploadComplete, setProgressionUploadComplete] =
-    useState(false);
+  const [progressionStep, setProgressionStep] =
+    useState<MilestoneProgressionStep>("idle");
   const [progressionSkippedReview, setProgressionSkippedReview] =
     useState(false);
   const [progressionParsedReview, setProgressionParsedReview] =
@@ -175,6 +179,38 @@ export function DocumentsWorkspace({
 
   useEffect(refreshArtifacts, [projectId, refreshKey]);
 
+  function resetProgressionState() {
+    setProgressionStep("idle");
+    setProgressionSkippedReview(false);
+    setProgressionParsedReview(null);
+    setProgressionParseError(null);
+  }
+
+  function syncProgressionWithWorkspace() {
+    if (!workspaceUi.canStartReviewGate) {
+      resetProgressionState();
+      return;
+    }
+
+    if (progressionStep === "gate" || generatingType === "milestone") {
+      return;
+    }
+
+    setProgressionStep(function resolveProgressionStep(previous) {
+      if (previous === "upload" || previous === "generate") {
+        return previous;
+      }
+
+      return "idle";
+    });
+  }
+
+  useEffect(syncProgressionWithWorkspace, [
+    workspaceUi.canStartReviewGate,
+    generatingType,
+    progressionStep,
+  ]);
+
   function isGeneratedArtifact(artifact: Artifact): boolean {
     return hasGeneratedContent(artifact);
   }
@@ -203,15 +239,6 @@ export function DocumentsWorkspace({
     setExpandedType(artifactType);
   }
 
-  function resetProgressionState() {
-    setShowProgressionUpload(false);
-    setProgressionUploadComplete(false);
-    setProgressionSkippedReview(false);
-    setProgressionParsedReview(null);
-    setProgressionParseError(null);
-    setShowReviewGate(false);
-  }
-
   async function handleGenerate(
     artifactType: ArtifactType,
     options?: GenerateOptions
@@ -220,7 +247,10 @@ export function DocumentsWorkspace({
     setGeneratingType(artifactType);
     setExpandedType(artifactType);
     setStreamingContent("");
-    setShowReviewGate(false);
+
+    if (artifactType === "milestone" && options?.nextMilestone) {
+      setProgressionStep("gate");
+    }
 
     const body: Record<string, unknown> = {
       project_id: projectId,
@@ -333,8 +363,7 @@ export function DocumentsWorkspace({
   }
 
   function handleContinueToNextMilestone() {
-    setShowProgressionUpload(true);
-    setProgressionUploadComplete(false);
+    setProgressionStep("upload");
     setProgressionSkippedReview(false);
     setProgressionParsedReview(null);
     setProgressionParseError(null);
@@ -364,7 +393,7 @@ export function DocumentsWorkspace({
 
       setProgressionParsedReview(data);
       setProgressionSkippedReview(false);
-      setProgressionUploadComplete(true);
+      setProgressionStep("generate");
       await loadArtifacts();
     } catch {
       setProgressionParseError("Failed to parse review file");
@@ -397,16 +426,39 @@ export function DocumentsWorkspace({
   function handleSkipProgressionUpload() {
     setProgressionSkippedReview(true);
     setProgressionParsedReview(null);
-    setProgressionUploadComplete(true);
+    setProgressionStep("generate");
   }
 
   function handleStartReviewGateFromProgression() {
-    setShowReviewGate(true);
+    if (progressionSkippedReview) {
+      void handleReviewGateComplete({
+        completedReview: "",
+        openQuestionAnswers: [],
+        skippedReview: true,
+      });
+      return;
+    }
+
+    const hasOpenQuestions =
+      (progressionParsedReview?.openQuestions.length ?? 0) > 0;
+    const hasManualSteps =
+      (progressionParsedReview?.manualSteps.length ?? 0) > 0;
+
+    if (!hasOpenQuestions && !hasManualSteps) {
+      void handleReviewGateComplete({
+        completedReview: progressionParsedReview?.rawContent ?? "",
+        openQuestionAnswers: [],
+        skippedReview: false,
+      });
+      return;
+    }
+
+    setProgressionStep("gate");
     setExpandedType("milestone");
   }
 
   function handleCancelReviewGate() {
-    setShowReviewGate(false);
+    setProgressionStep("generate");
   }
 
   async function handleReviewGateComplete(result: ReviewGateResult) {
@@ -431,7 +483,7 @@ export function DocumentsWorkspace({
   }
 
   function renderReviewGate() {
-    if (!showReviewGate) {
+    if (progressionStep !== "gate") {
       return null;
     }
 
@@ -440,7 +492,7 @@ export function DocumentsWorkspace({
         hideUploadStep
         initialParsedReview={progressionParsedReview}
         initialSkippedReview={progressionSkippedReview}
-        nextMilestoneLabel={workspaceUi.nextMilestoneDisplayName}
+        nextMilestoneLabel={getNextMilestoneProgressionLabel()}
         onCancel={handleCancelReviewGate}
         onComplete={handleReviewGateComplete}
         projectId={projectId}
@@ -449,8 +501,14 @@ export function DocumentsWorkspace({
     );
   }
 
+  function getNextMilestoneProgressionLabel(): string {
+    return getMilestoneProgressionLabel(
+      workspaceUi.milestoneSequenceNumber + 1
+    );
+  }
+
   function renderProgressionUploadSection() {
-    if (!showProgressionUpload || progressionUploadComplete) {
+    if (progressionStep !== "upload") {
       return null;
     }
 
@@ -491,11 +549,7 @@ export function DocumentsWorkspace({
   }
 
   function renderContinueButton() {
-    if (!workspaceUi.canStartReviewGate) {
-      return null;
-    }
-
-    if (showProgressionUpload || showReviewGate) {
+    if (!workspaceUi.canStartReviewGate || progressionStep !== "idle") {
       return null;
     }
 
@@ -507,13 +561,13 @@ export function DocumentsWorkspace({
         type="button"
         variant="secondary"
       >
-        Continue to {workspaceUi.nextMilestoneDisplayName}
+        Continue to {getNextMilestoneProgressionLabel()}
       </Button>
     );
   }
 
   function renderGenerateNextMilestoneButton() {
-    if (!progressionUploadComplete || showReviewGate) {
+    if (progressionStep !== "generate") {
       return null;
     }
 
@@ -530,7 +584,7 @@ export function DocumentsWorkspace({
           size="sm"
           type="button"
         >
-          Generate {workspaceUi.nextMilestoneDisplayName}
+          Generate {getNextMilestoneProgressionLabel()}
         </Button>
       </div>
     );
