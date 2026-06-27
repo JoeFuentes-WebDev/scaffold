@@ -1,10 +1,9 @@
 import { getAuthenticatedSupabase } from "@/lib/services/authService";
-import { markReviewUploaded } from "@/lib/services/artifactService";
-import { parseReviewMarkdown } from "@/lib/services/reviewParser";
+import { markReviewProcessed } from "@/lib/services/artifactService";
 import { verifyProjectAccess } from "@/lib/services/projectAccessService";
 import {
+  CompleteReviewSchema,
   invalidRequestResponse,
-  ParseReviewSchema,
 } from "@/lib/schemas";
 import { handleRouteError } from "@/lib/utils/routeError";
 import { NextResponse } from "next/server";
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const parsed = ParseReviewSchema.safeParse(body);
+    const parsed = CompleteReviewSchema.safeParse(body);
 
     if (!parsed.success) {
       return invalidRequestResponse(parsed.error);
@@ -34,15 +33,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const result = parseReviewMarkdown(parsed.data.content);
-    await markReviewUploaded(auth.supabase, parsed.data.project_id);
+    const artifact = await markReviewProcessed(
+      auth.supabase,
+      parsed.data.project_id
+    );
 
-    return NextResponse.json(result);
+    return NextResponse.json({ artifact });
   } catch (error) {
     return handleRouteError(
       error,
-      "POST /api/review/parse",
-      "Failed to parse review file. Please try again."
+      "POST /api/review/complete",
+      "Failed to complete review gate. Please try again."
     );
   }
 }

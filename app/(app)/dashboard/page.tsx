@@ -1,5 +1,4 @@
-import { AppHeader } from "@/components/layout/AppHeader";
-import { DashboardProjectsView } from "@/components/project/DashboardProjectsView";
+import { DashboardPageClient } from "@/components/project/DashboardPageClient";
 import { listProjectsForUser } from "@/lib/services/projectService";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -20,12 +19,10 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col bg-[#F8F9FA]">
-      <AppHeader
-        userAvatarUrl={userMetadata.avatar_url}
-        userEmail={user.email}
-      />
-      <DashboardProjectsView projects={projects} />
-    </div>
+    <DashboardPageClient
+      projects={projects}
+      userAvatarUrl={userMetadata.avatar_url}
+      userEmail={user.email}
+    />
   );
 }

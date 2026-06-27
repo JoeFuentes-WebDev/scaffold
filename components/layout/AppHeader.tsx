@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectDescriptionEditor } from "@/components/project/ProjectDescriptionEditor";
 
@@ -10,6 +12,7 @@ interface AppHeaderProps {
   userEmail?: string;
   userAvatarUrl?: string;
   onDescriptionUpdated?: () => void;
+  headerAction?: ReactNode;
 }
 
 function getInitials(email: string | undefined): string {
@@ -27,6 +30,7 @@ export function AppHeader({
   userEmail,
   userAvatarUrl,
   onDescriptionUpdated,
+  headerAction,
 }: AppHeaderProps) {
   const showDescriptionEditor =
     projectId && projectDescription !== undefined && onDescriptionUpdated;
@@ -51,12 +55,15 @@ export function AppHeader({
           />
         ) : null}
       </div>
-      <Avatar className="size-8 shrink-0">
+      <div className="flex shrink-0 items-center gap-3">
+        {headerAction}
+        <Avatar className="size-8 shrink-0">
         {userAvatarUrl ? (
           <AvatarImage alt="User avatar" src={userAvatarUrl} />
         ) : null}
         <AvatarFallback>{getInitials(userEmail)}</AvatarFallback>
-      </Avatar>
+        </Avatar>
+      </div>
     </header>
   );
 }

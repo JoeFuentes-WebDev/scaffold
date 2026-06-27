@@ -61,44 +61,38 @@ export async function checkDomainUnlocks(
   const systemPrompt = buildCheckUnlocksSystemPrompt();
   const userPrompt = buildCheckUnlocksPrompt({ project, domains, rounds });
 
-  let rawResponse: string;
   try {
-    rawResponse = await callClaude(systemPrompt, userPrompt);
-  } catch (error) {
-    console.error("Claude check-unlocks error:", error);
-    throw new Error("Something went wrong checking domain unlocks. Please try again.");
-  }
+    const rawResponse = await callClaude(systemPrompt, userPrompt);
+    const parsed = parseClaudeJson<CheckUnlocksResponse>(rawResponse);
+    const unlockedDomains: DomainName[] = [];
 
-  let parsed: CheckUnlocksResponse;
-  try {
-    parsed = parseClaudeJson<CheckUnlocksResponse>(rawResponse);
-  } catch (error) {
-    console.error("Claude check-unlocks malformed JSON:", rawResponse);
-    throw new Error("Something went wrong checking domain unlocks. Please try again.");
-  }
+    for (const domainName of parsed.domains_to_unlock ?? []) {
+      if (!isValidDomainName(domainName)) {
+        continue;
+      }
 
-  const unlockedDomains: DomainName[] = [];
+      const domain = await getDomainByName(supabase, projectId, domainName);
+      if (!domain || domain.status !== "locked") {
+        continue;
+      }
 
-  for (const domainName of parsed.domains_to_unlock ?? []) {
-    if (!isValidDomainName(domainName)) {
-      continue;
+      await unlockDomain(supabase, projectId, domainName);
+      unlockedDomains.push(domainName);
     }
 
-    const domain = await getDomainByName(supabase, projectId, domainName);
-    if (!domain || domain.status !== "locked") {
-      continue;
-    }
+    const updatedDomains = await getDomainsForProject(supabase, projectId);
 
-    await unlockDomain(supabase, projectId, domainName);
-    unlockedDomains.push(domainName);
+    return {
+      unlocked_domains: unlockedDomains,
+      documents_status: getDocumentsTabStatus(updatedDomains),
+    };
+  } catch (error) {
+    console.error("[checkDomainUnlocks]", error);
+    return {
+      unlocked_domains: [],
+      documents_status: getDocumentsTabStatus(domains),
+    };
   }
-
-  const updatedDomains = await getDomainsForProject(supabase, projectId);
-
-  return {
-    unlocked_domains: unlockedDomains,
-    documents_status: getDocumentsTabStatus(updatedDomains),
-  };
 }
 
 /** @deprecated Use checkDomainUnlocks */

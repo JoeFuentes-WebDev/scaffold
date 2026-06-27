@@ -69,3 +69,24 @@ export async function upsertArtifact(
 
   return artifact;
 }
+
+export async function updateArtifactStatus(
+  supabase: SupabaseClient,
+  projectId: string,
+  artifactType: ArtifactType,
+  status: ArtifactStatus
+): Promise<Artifact> {
+  const { data: artifact, error } = await supabase
+    .from("artifacts")
+    .update({ status })
+    .eq("project_id", projectId)
+    .eq("artifact_type", artifactType)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return artifact;
+}

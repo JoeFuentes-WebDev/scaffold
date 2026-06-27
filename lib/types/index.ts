@@ -22,7 +22,13 @@ export type ArtifactType =
   | "review"
   | "env_manifest";
 
-export type ArtifactStatus = "pending" | "generated" | "partial";
+export type ArtifactStatus =
+  | "pending"
+  | "generated"
+  | "partial"
+  | "template_generated"
+  | "uploaded"
+  | "processed";
 
 export interface Artifact {
   id: string;
@@ -42,6 +48,7 @@ export interface ArtifactThresholdUi {
 
 export interface ArtifactsWorkspaceUi {
   canGenerateNextMilestone: boolean;
+  canStartReviewGate: boolean;
   milestoneSequenceNumber: number;
   nextMilestoneDisplayName: string;
   rowNaming: Record<ArtifactType, { displayName: string; filename: string }>;
@@ -68,6 +75,7 @@ export interface StreamArtifactOptions {
   regenerate?: boolean;
   nextMilestone?: boolean;
   reviewContext?: MilestoneReviewContext;
+  skippedReview?: boolean;
 }
 
 export interface Project {

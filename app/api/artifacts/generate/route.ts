@@ -84,6 +84,7 @@ export async function POST(request: Request) {
           {
             regenerate: data.regenerate === true,
             nextMilestone: data.next_milestone === true,
+            skippedReview: data.skipped_review === true,
             reviewContext,
           }
         );

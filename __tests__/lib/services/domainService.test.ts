@@ -179,14 +179,13 @@ describe("checkDomainUnlocks", () => {
     expect(result.unlocked_domains).toEqual([]);
   });
 
-  it("throws when Claude returns malformed JSON", async () => {
+  it("returns gracefully when Claude returns malformed JSON", async () => {
     getDomainsForProject.mockResolvedValue([makeDomain("scope", "locked")]);
     callClaude.mockResolvedValue("not valid json {{{");
 
-    await expect(checkDomainUnlocks(projectId)).rejects.toThrow(
-      "Something went wrong checking domain unlocks. Please try again."
-    );
+    const result = await checkDomainUnlocks(projectId);
 
+    expect(result.unlocked_domains).toEqual([]);
     expect(unlockDomain).not.toHaveBeenCalled();
     expect(updateDomainStatus).not.toHaveBeenCalled();
   });

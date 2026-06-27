@@ -201,6 +201,15 @@ describe("evaluateRound", () => {
 
   it("evaluates answers and returns advance action", async () => {
     setupEvaluateBaseMocks();
+    const domainRecord: Domain = {
+      id: "123e4567-e89b-12d3-a456-426614174010",
+      project_id: projectId,
+      name: "product",
+      status: "in_progress",
+      data: {},
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    };
     callClaude.mockResolvedValue(
       JSON.stringify({
         action: "advance",
@@ -210,7 +219,7 @@ describe("evaluateRound", () => {
         },
       })
     );
-    getDomainByName.mockResolvedValue(architectureDomain);
+    getDomainByName.mockResolvedValue(domainRecord);
 
     const result = await evaluateRound(
       mockSupabase,
@@ -224,6 +233,11 @@ describe("evaluateRound", () => {
     expect(result.round).toBeNull();
     expect(result.domains_affected).toContain("architecture");
     expect(updateRound).toHaveBeenCalledOnce();
+    expect(updateDomainStatus).toHaveBeenCalledWith(
+      mockSupabase,
+      domainRecord.id,
+      "complete"
+    );
   });
 
   it("evaluates answers and returns follow_up with new questions", async () => {
@@ -275,7 +289,25 @@ describe("evaluateRound", () => {
         },
       })
     );
-    getDomainByName.mockResolvedValue(architectureDomain);
+    getDomainByName.mockImplementation(
+      async (_supabase, _projectId, name: string) => {
+        if (name === "architecture") {
+          return architectureDomain;
+        }
+        if (name === "product") {
+          return {
+            id: "123e4567-e89b-12d3-a456-426614174010",
+            project_id: projectId,
+            name: "product",
+            status: "in_progress",
+            data: {},
+            created_at: "2026-01-01T00:00:00.000Z",
+            updated_at: "2026-01-01T00:00:00.000Z",
+          };
+        }
+        return null;
+      }
+    );
 
     await evaluateRound(
       mockSupabase,

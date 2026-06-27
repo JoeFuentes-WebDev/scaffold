@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   canGenerateNextMilestone,
+  canStartReviewGate,
   getArtifactNaming,
   getMilestoneRowNaming,
   getNextMilestoneNaming,
@@ -10,7 +11,7 @@ import {
   hasGeneratedMilestone,
 } from "@/lib/services/artifactNaming";
 import { streamClaude } from "@/lib/claude/client";
-import { getArtifactByType, getArtifactsForProject, upsertArtifact } from "@/lib/data/artifacts";
+import { getArtifactByType, getArtifactsForProject, updateArtifactStatus, upsertArtifact } from "@/lib/data/artifacts";
 import { getDomainsForProject } from "@/lib/data/domains";
 import {
   formatDomainList,
@@ -37,6 +38,7 @@ import { ARTIFACT_DEFINITIONS } from "@/constants/artifacts";
 import type {
   Artifact,
   ArtifactsWorkspaceUi,
+  ArtifactStatus,
   ArtifactType,
   Domain,
   DomainName,
@@ -202,6 +204,47 @@ function buildArtifactThresholds(
   return thresholds;
 }
 
+function resolveArtifactStatus(
+  artifactType: ArtifactType,
+  isPartial: boolean
+): ArtifactStatus {
+  if (isPartial) {
+    return "partial";
+  }
+
+  if (artifactType === "review") {
+    return "template_generated";
+  }
+
+  return "generated";
+}
+
+export async function markReviewUploaded(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<Artifact> {
+  const reviewArtifact = await getArtifactByType(supabase, projectId, "review");
+
+  if (!reviewArtifact) {
+    throw new Error("Review artifact not found");
+  }
+
+  return updateArtifactStatus(supabase, projectId, "review", "uploaded");
+}
+
+export async function markReviewProcessed(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<Artifact> {
+  const reviewArtifact = await getArtifactByType(supabase, projectId, "review");
+
+  if (!reviewArtifact) {
+    throw new Error("Review artifact not found");
+  }
+
+  return updateArtifactStatus(supabase, projectId, "review", "processed");
+}
+
 export function buildArtifactsWorkspaceUi(
   artifacts: Artifact[],
   domains: Domain[]
@@ -217,6 +260,7 @@ export function buildArtifactsWorkspaceUi(
       milestoneArtifact,
       reviewArtifact
     ),
+    canStartReviewGate: canStartReviewGate(milestoneArtifact, reviewArtifact),
     milestoneSequenceNumber: milestoneNaming.sequenceNumber,
     nextMilestoneDisplayName: nextMilestoneNaming.displayName,
     rowNaming: {
@@ -282,9 +326,15 @@ export async function streamArtifactGeneration(
       "review"
     );
 
-    if (!canGenerateNextMilestone(milestoneArtifact, reviewArtifact)) {
+    if (options?.skippedReview) {
+      if (!hasGeneratedMilestone(milestoneArtifact)) {
+        throw new Error(
+          "Generate the review for the current milestone before starting the next one."
+        );
+      }
+    } else if (!canGenerateNextMilestone(milestoneArtifact, reviewArtifact)) {
       throw new Error(
-        "Generate the review for the current milestone before starting the next one."
+        "Complete the review gate before starting the next milestone."
       );
     }
   }
@@ -348,7 +398,7 @@ export async function streamArtifactGeneration(
     project_id: projectId,
     artifact_type: artifactType,
     content,
-    status: isPartial ? "partial" : "generated",
+    status: resolveArtifactStatus(artifactType, isPartial),
     sequence_number: sequenceNumber,
   });
 

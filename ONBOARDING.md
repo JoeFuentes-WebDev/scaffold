@@ -33,7 +33,7 @@ Scaffold V1 allows senior engineers to capture full project context through an 8
     /routeError.ts          → handleRouteError, logRouteError — used in every catch block
 /supabase
   /migrations               → All schema changes via Supabase CLI migrations
-/tests                      → Vitest test files mirroring source structure
+/tests                      → Vitest test files mirroring source structure (`/__tests__/`)
 ```
 
 ---
@@ -120,7 +120,7 @@ Scaffold V1 allows senior engineers to capture full project context through an 8
 - Never use Docker at V1
 - Never expose `ANTHROPIC_API_KEY` or `SUPABASE_SERVICE_ROLE_KEY` as `NEXT_PUBLIC_` variables
 - Never write UI component tests (out of scope at V1)
-- Never generate MILESTONE_02+ without REVIEW_01 status = `generated`
+- Never generate MILESTONE_02+ without REVIEW_01 status = `uploaded` or `processed`
 - Never import `/lib/services` from components — always go through API routes
 
 ---
@@ -205,19 +205,25 @@ Scaffold V1 allows senior engineers to capture full project context through an 8
 | project_id | uuid | FK to projects |
 | artifact_type | text | One of four types below |
 | content | text | Markdown content |
-| status | text | `pending` → `generated` |
+| status | text | See status values below |
 | sequence_number | integer | For MILESTONE_XX / REVIEW_XX ordering |
 
 **Artifact types:** `ONBOARDING.md`, `MILESTONE_XX.md`, `REVIEW_XX.md`, `ENV_MANIFEST.md`
 
+**Status values:**
+- Onboarding, milestone, env_manifest: `pending` → `generated` (or `partial` if stream interrupted)
+- Review only: `pending` → `template_generated` → `uploaded` → `processed`
+
 **Invariants:**
-- MILESTONE_02+ requires preceding REVIEW with `status = generated`
-- Status transitions: `pending` → `generated` only
+- MILESTONE_02+ requires preceding REVIEW with `status = uploaded` or `processed`
+- Non-review artifacts transition `pending` → `generated` only (plus `partial` on stream interrupt)
 - No skipping sequence numbers
 - Partial artifacts saved if stream is interrupted
 
 **Business rules:**
-- MILESTONE_02 is blocked until REVIEW_01 `status = generated`
+- MILESTONE_02 is blocked until REVIEW_01 is uploaded and the review gate is processed
+- Review template generation sets `template_generated`; upload parse sets `uploaded`; gate completion sets `processed`
+- Domains auto-complete when Claude returns `advance`; "Mark as complete" is a manual override while `in_progress`
 - Enforcement points: UI layer (progression gate) + `artifactService` server-side
 - ProjectModel always assembles full history (all domains + all rounds) — no partial views at V1
 
@@ -243,7 +249,7 @@ Scaffold V1 allows senior engineers to capture full project context through an 8
 3. Never call the Anthropic API from anywhere except server-side API routes
 4. Never import `/lib/services` from components — route all calls through API routes via fetch
 5. Never allow gaps in `round_number` sequence within a domain
-6. Never generate MILESTONE_XX without the preceding REVIEW_XX having `status = generated`
+6. Never generate MILESTONE_XX without the preceding REVIEW_XX having `status = uploaded` or `processed`
 7. Never use inline styles — Tailwind classes only
 8. Never use the Vercel AI SDK — use `@anthropic-ai/sdk` directly
 9. Never modify the Supabase database directly in production

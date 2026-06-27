@@ -42,6 +42,7 @@ function buildDefaultArtifactThresholds(): ArtifactsWorkspaceUi["artifactThresho
 function buildDefaultWorkspaceUi(): ArtifactsWorkspaceUi {
   return {
     canGenerateNextMilestone: false,
+    canStartReviewGate: false,
     milestoneSequenceNumber: 1,
     nextMilestoneDisplayName: getArtifactFilename("milestone", 2),
     rowNaming: {
@@ -84,10 +85,20 @@ function getArtifactForType(
 }
 
 function hasGeneratedContent(artifact: Artifact | null): boolean {
-  return Boolean(
-    artifact?.content &&
-      (artifact.status === "generated" || artifact.status === "partial")
-  );
+  if (!artifact?.content) {
+    return false;
+  }
+
+  if (artifact.artifact_type === "review") {
+    return (
+      artifact.status === "template_generated" ||
+      artifact.status === "uploaded" ||
+      artifact.status === "processed" ||
+      artifact.status === "partial"
+    );
+  }
+
+  return artifact.status === "generated" || artifact.status === "partial";
 }
 
 export function DocumentsWorkspace({
@@ -180,6 +191,10 @@ export function DocumentsWorkspace({
 
     if (options?.nextMilestone) {
       body.next_milestone = true;
+    }
+
+    if (options?.reviewContext?.skippedReview) {
+      body.skipped_review = true;
     }
 
     if (options?.reviewContext && !options.reviewContext.skippedReview) {
@@ -284,7 +299,21 @@ export function DocumentsWorkspace({
     setShowReviewGate(false);
   }
 
-  function handleReviewGateComplete(result: ReviewGateResult) {
+  async function handleReviewGateComplete(result: ReviewGateResult) {
+    if (!result.skippedReview) {
+      const response = await fetch("/api/review/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        setError(data.error ?? "Failed to complete review gate");
+        return;
+      }
+    }
+
     void handleGenerate("milestone", {
       nextMilestone: true,
       reviewContext: result,
@@ -301,13 +330,14 @@ export function DocumentsWorkspace({
         nextMilestoneLabel={workspaceUi.nextMilestoneDisplayName}
         onCancel={handleCancelReviewGate}
         onComplete={handleReviewGateComplete}
+        projectId={projectId}
         reviewSequenceNumber={workspaceUi.milestoneSequenceNumber}
       />
     );
   }
 
   function renderNextMilestoneButton() {
-    if (!workspaceUi.canGenerateNextMilestone) {
+    if (!workspaceUi.canStartReviewGate) {
       return null;
     }
 

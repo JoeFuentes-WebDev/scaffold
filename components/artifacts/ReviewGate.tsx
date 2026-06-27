@@ -16,6 +16,7 @@ export interface ReviewGateResult {
 }
 
 interface ReviewGateProps {
+  projectId: string;
   reviewSequenceNumber: number;
   nextMilestoneLabel: string;
   onComplete: (result: ReviewGateResult) => void;
@@ -67,6 +68,7 @@ function convertAnswersToPairs(
 }
 
 export function ReviewGate({
+  projectId,
   reviewSequenceNumber,
   nextMilestoneLabel,
   onComplete,
@@ -120,7 +122,10 @@ export function ReviewGate({
       const response = await fetch("/api/review/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          project_id: projectId,
+          content,
+        }),
       });
 
       const data = (await response.json()) as ParsedReview & { error?: string };

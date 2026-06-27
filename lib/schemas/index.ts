@@ -83,6 +83,7 @@ export const GenerateArtifactSchema = z.object({
   artifact_type: ArtifactTypeSchema,
   regenerate: z.boolean().optional(),
   next_milestone: z.boolean().optional(),
+  skipped_review: z.boolean().optional(),
   review_context: z
     .object({
       completed_review: z.string().trim().min(1),
@@ -107,7 +108,12 @@ export const CheckUnlocksSchema = z.object({
 });
 
 export const ParseReviewSchema = z.object({
+  project_id: z.string().uuid(),
   content: z.string().min(1, "content is required"),
+});
+
+export const CompleteReviewSchema = z.object({
+  project_id: z.string().uuid(),
 });
 
 export function invalidRequestResponse(error: z.ZodError) {

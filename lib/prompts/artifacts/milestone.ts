@@ -32,6 +32,7 @@ Separate the two sections with a horizontal rule (---).
 
 Tone: direct, scoped, unambiguous. One change only.
 Do not invent scope. Only include what the ProjectModel and current build phase support.
+Do not instruct Cursor to create or update README.md or any files outside this milestone.
 Return only the markdown content.`;
 }
 

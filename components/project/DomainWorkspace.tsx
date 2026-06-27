@@ -61,8 +61,7 @@ export function DomainWorkspace({
 
   const domainLabel = getDomainLabel(domain);
   const answeredRounds = getAnsweredRounds(rounds);
-  const showStopHere =
-    domain.status === "in_progress" || domain.status === "complete";
+  const showStopHere = domain.status === "in_progress";
   const showClarifyButton =
     domain.status === "in_progress" || domain.status === "complete";
 
@@ -171,6 +170,7 @@ export function DomainWorkspace({
         setActiveRound(data.round);
       } else {
         setActiveRound(null);
+        await requestCheckDomainUnlocks(projectId);
       }
 
       await loadRounds();
@@ -252,7 +252,34 @@ export function DomainWorkspace({
     }
   }
 
-  function handleShowClarifyForm() {
+  async function handleShowClarifyForm() {
+    if (domain.status === "complete") {
+      setError(null);
+      setIsUpdatingStatus(true);
+
+      try {
+        const response = await fetch(`/api/domains/${domain.id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "in_progress" }),
+        });
+
+        const data = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          setError(data.error ?? "Failed to update domain status");
+          return;
+        }
+
+        onRefresh();
+      } catch {
+        setError("Failed to update domain status");
+        return;
+      } finally {
+        setIsUpdatingStatus(false);
+      }
+    }
+
     setShowClarifyForm(true);
     setClarificationText("");
   }
@@ -443,7 +470,7 @@ export function DomainWorkspace({
             id={`stop-here-${domain.id}`}
             onCheckedChange={handleStopHereChange}
           />
-          <Label htmlFor={`stop-here-${domain.id}`}>Stop Here</Label>
+          <Label htmlFor={`stop-here-${domain.id}`}>Mark as complete</Label>
         </div>
       ) : null}
 

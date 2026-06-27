@@ -30,6 +30,7 @@ Separate the two sections with a horizontal rule (---).
 
 Tone: direct, dense, structured. Written for a machine, not a human.
 No filler. No preamble. No "here is your ONBOARDING.md".
+Do not instruct Cursor to create or update README.md or any files outside ONBOARDING.md.
 Return only the markdown content.`;
 }
 

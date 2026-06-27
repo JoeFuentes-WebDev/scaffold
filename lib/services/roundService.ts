@@ -241,7 +241,7 @@ export async function evaluateRound(
 
   const domain = await getDomainByName(supabase, projectId, domainName);
   if (domain) {
-    await updateDomainStatus(supabase, domain.id, "in_progress");
+    await updateDomainStatus(supabase, domain.id, "complete");
   }
 
   return {
@@ -292,13 +292,20 @@ export async function createClarificationRound(
   domainName: string,
   clarificationText: string
 ): Promise<Round> {
+  const domain = await getDomainByName(supabase, projectId, domainName);
+  const shouldRestoreComplete = domain?.status === "complete";
+
+  if (shouldRestoreComplete && domain) {
+    await updateDomainStatus(supabase, domain.id, "in_progress");
+  }
+
   const domainRounds = await getRoundsForDomain(
     supabase,
     projectId,
     domainName
   );
 
-  return createRound(supabase, {
+  const round = await createRound(supabase, {
     project_id: projectId,
     domain_name: domainName,
     round_number: getNextRoundNumber(domainRounds),
@@ -311,4 +318,10 @@ export async function createClarificationRound(
       },
     ],
   });
+
+  if (shouldRestoreComplete && domain) {
+    await updateDomainStatus(supabase, domain.id, "complete");
+  }
+
+  return round;
 }

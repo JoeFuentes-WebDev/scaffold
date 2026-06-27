@@ -56,9 +56,43 @@ export function hasGeneratedMilestone(milestoneArtifact: Artifact | null): boole
   );
 }
 
-export function hasGeneratedReview(reviewArtifact: Artifact | null): boolean {
+export function hasReviewTemplate(reviewArtifact: Artifact | null): boolean {
   return Boolean(
-    reviewArtifact?.content && reviewArtifact.status === "generated"
+    reviewArtifact?.content &&
+      (reviewArtifact.status === "template_generated" ||
+        reviewArtifact.status === "uploaded" ||
+        reviewArtifact.status === "processed" ||
+        reviewArtifact.status === "partial")
+  );
+}
+
+export function hasCompletedReviewGate(reviewArtifact: Artifact | null): boolean {
+  return Boolean(
+    reviewArtifact?.content &&
+      (reviewArtifact.status === "uploaded" ||
+        reviewArtifact.status === "processed")
+  );
+}
+
+/** @deprecated Use hasReviewTemplate */
+export function hasGeneratedReview(reviewArtifact: Artifact | null): boolean {
+  return hasReviewTemplate(reviewArtifact);
+}
+
+export function canStartReviewGate(
+  milestoneArtifact: Artifact | null,
+  reviewArtifact: Artifact | null
+): boolean {
+  if (!milestoneArtifact?.content || milestoneArtifact.status !== "generated") {
+    return false;
+  }
+
+  if (!hasReviewTemplate(reviewArtifact)) {
+    return false;
+  }
+
+  return (
+    reviewArtifact!.sequence_number === (milestoneArtifact.sequence_number ?? 1)
   );
 }
 
@@ -70,7 +104,7 @@ export function canGenerateNextMilestone(
     return false;
   }
 
-  if (!hasGeneratedReview(reviewArtifact)) {
+  if (!hasCompletedReviewGate(reviewArtifact)) {
     return false;
   }
 
