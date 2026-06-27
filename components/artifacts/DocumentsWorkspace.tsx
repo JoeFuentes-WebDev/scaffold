@@ -103,14 +103,6 @@ function hasGeneratedContent(artifact: Artifact | null): boolean {
   return artifact.status === "generated" || artifact.status === "partial";
 }
 
-function isReviewExpandable(artifact: Artifact | null): boolean {
-  if (!artifact?.content) {
-    return false;
-  }
-
-  return artifact.status === "uploaded" || artifact.status === "processed";
-}
-
 function getReviewTemplateLabel(
   artifact: Artifact | null,
   milestoneDisplayName: string
@@ -619,9 +611,6 @@ export function DocumentsWorkspace({
     const secondaryLabel = isReview
       ? getReviewTemplateLabel(artifact, milestoneNaming.displayName)
       : undefined;
-    const isExpandable = isReview
-      ? isReviewExpandable(artifact)
-      : generated || generatingType === artifactType;
     const showGenerateButton = !isReview;
 
     function handleRowDownload() {
@@ -650,7 +639,6 @@ export function DocumentsWorkspace({
           }
           generateLabel={generateLabel}
           hasGeneratedContent={generated}
-          isExpandable={isExpandable}
           isExpanded={expandedType === artifactType}
           isGenerating={generatingType === artifactType}
           isPartial={artifact?.status === "partial"}

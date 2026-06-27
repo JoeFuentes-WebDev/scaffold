@@ -18,7 +18,7 @@ interface ArtifactRowProps {
   isReady: boolean;
   missingLabel: string;
   hasGeneratedContent: boolean;
-  isExpandable: boolean;
+  isExpandable?: boolean;
   isExpanded: boolean;
   isGenerating: boolean;
   previewContent: string;
@@ -54,8 +54,11 @@ export function ArtifactRow({
   onDownload,
   gateContent,
 }: ArtifactRowProps) {
+  const canExpand =
+    isExpandable ?? (hasGeneratedContent || isStreaming);
+
   function handleRowClick() {
-    if (isExpandable) {
+    if (canExpand) {
       onToggleExpand();
     }
   }
@@ -124,7 +127,7 @@ export function ArtifactRow({
   return (
     <div className="overflow-hidden rounded-md border border-[#E5E7EB] bg-white">
       <div
-        className={`flex items-center justify-between gap-4 px-4 py-3 ${isExpandable ? "cursor-pointer hover:bg-[#F9FAFB]" : ""}`}
+        className={`flex items-center justify-between gap-4 px-4 py-3 ${canExpand ? "cursor-pointer hover:bg-[#F9FAFB]" : ""}`}
         onClick={handleRowClick}
       >
         <div className="min-w-0 flex-1">
@@ -155,7 +158,7 @@ export function ArtifactRow({
           >
             Download
           </Button>
-          {isExpandable ? (
+          {canExpand ? (
             <ChevronDownIcon
               className={`size-4 text-[#6B7280] transition-transform ${isExpanded ? "rotate-180" : ""}`}
             />
