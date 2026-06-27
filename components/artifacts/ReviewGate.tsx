@@ -21,6 +21,9 @@ interface ReviewGateProps {
   nextMilestoneLabel: string;
   onComplete: (result: ReviewGateResult) => void;
   onCancel: () => void;
+  hideUploadStep?: boolean;
+  initialParsedReview?: ParsedReview | null;
+  initialSkippedReview?: boolean;
 }
 
 type GateStep = "upload" | "open_questions" | "manual_steps" | "ready";
@@ -67,16 +70,47 @@ function convertAnswersToPairs(
   });
 }
 
+function resolveInitialStep(
+  hideUploadStep: boolean,
+  initialSkippedReview: boolean,
+  initialParsedReview: ParsedReview | null
+): GateStep {
+  if (!hideUploadStep) {
+    return "upload";
+  }
+
+  if (initialSkippedReview) {
+    return "ready";
+  }
+
+  if (initialParsedReview && initialParsedReview.openQuestions.length > 0) {
+    return "open_questions";
+  }
+
+  if (initialParsedReview && initialParsedReview.manualSteps.length > 0) {
+    return "manual_steps";
+  }
+
+  return "ready";
+}
+
 export function ReviewGate({
   projectId,
   reviewSequenceNumber,
   nextMilestoneLabel,
   onComplete,
   onCancel,
+  hideUploadStep = false,
+  initialParsedReview = null,
+  initialSkippedReview = false,
 }: ReviewGateProps) {
-  const [step, setStep] = useState<GateStep>("upload");
-  const [parsedReview, setParsedReview] = useState<ParsedReview | null>(null);
-  const [skippedReview, setSkippedReview] = useState(false);
+  const [step, setStep] = useState<GateStep>(() =>
+    resolveInitialStep(hideUploadStep, initialSkippedReview, initialParsedReview)
+  );
+  const [parsedReview, setParsedReview] = useState<ParsedReview | null>(
+    initialParsedReview
+  );
+  const [skippedReview, setSkippedReview] = useState(initialSkippedReview);
   const [openQuestionAnswers, setOpenQuestionAnswers] = useState<
     { question: string; answer: string }[]
   >([]);
@@ -310,8 +344,7 @@ export function ReviewGate({
       <div className="space-y-4">
         {skippedReview ? (
           <p className="text-sm text-amber-600">
-            Generating without a completed review. Open questions from the
-            previous milestone will not be factored in.
+            Generating without a completed review. Open questions may be missed.
           </p>
         ) : null}
         <p className="text-sm text-[#6B7280]">

@@ -1,11 +1,15 @@
 import type { ParsedReview } from "@/lib/types";
 
-function extractSectionContent(content: string, headerPattern: RegExp): string {
+function extractSectionContent(
+  content: string,
+  headerPatterns: RegExp[]
+): string {
   const lines = content.split("\n");
   let sectionStart = -1;
 
   for (let index = 0; index < lines.length; index += 1) {
-    if (headerPattern.test(lines[index].trim())) {
+    const trimmed = lines[index].trim();
+    if (headerPatterns.some((pattern) => pattern.test(trimmed))) {
       sectionStart = index + 1;
       break;
     }
@@ -19,8 +23,12 @@ function extractSectionContent(content: string, headerPattern: RegExp): string {
 
   for (let index = sectionStart; index < lines.length; index += 1) {
     const line = lines[index];
+    const trimmed = line.trim();
 
-    if (/^##\s+/.test(line.trim()) && index > sectionStart) {
+    if (
+      (/^##\s+/.test(trimmed) || /^###\s+/.test(trimmed)) &&
+      index > sectionStart
+    ) {
       break;
     }
 
@@ -56,13 +64,15 @@ function extractListItems(sectionContent: string): string[] {
 }
 
 export function parseReviewMarkdown(content: string): ParsedReview {
-  const openQuestionsSection = extractSectionContent(
-    content,
-    /^##\s+Open Questions/i
-  );
+  const openQuestionsSection = extractSectionContent(content, [
+    /^##\s+Open Questions/i,
+    /^###\s+\d+\.\s*Open Questions/i,
+  ]);
   const manualStepsSection =
-    extractSectionContent(content, /^##\s+Manual Steps/i) ||
-    extractSectionContent(content, /^##\s+Manual Step/i);
+    extractSectionContent(content, [/^##\s+Manual Steps/i]) ||
+    extractSectionContent(content, [/^##\s+Manual Step/i]) ||
+    extractSectionContent(content, [/^###\s+\d+\.\s*Manual Steps Required/i]) ||
+    extractSectionContent(content, [/^###\s+\d+\.\s*Manual Step/i]);
 
   return {
     rawContent: content,

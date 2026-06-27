@@ -19,11 +19,28 @@ A structured self-audit template for Cursor to fill in. Include these sections w
 2. Files created — list with one-line description of what each does
 3. Files modified — list with what changed and why
 4. Assumptions made — any decision made where instructions were ambiguous
-5. Open questions — anything unresolved that the developer needs to decide
+
+### 5. Open Questions
+
+1. [Question text] — Impact: [impact if not resolved]
+2. [Question text] — Impact: [impact if not resolved]
+
+> If none: No open questions.
+
 6. Risks — anything that could break silently or needs manual verification
+
+### 6. Manual Steps Required
+
+1. [Step description] — Why: [reason]
+2. [Step description] — Why: [reason]
+
+> If none: No manual steps required.
+
 7. Layer violations — any place where layers were combined (should be none)
 8. Engineering rule violations — any rule that was bent or broken (should be none)
 9. Ready to proceed — yes/no with reasoning
+
+IMPORTANT: Sections 5 and 6 MUST use numbered lists exactly as shown above. Do NOT use markdown tables for Open Questions or Manual Steps.
 
 Separate the two sections with a horizontal rule (---).
 

@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { QuestionItem } from "@/components/project/QuestionItem";
 import { NA_ANSWER_SENTINEL } from "@/constants/answers";
-import type { EvaluateAnswerInput, Round } from "@/lib/types";
+import type { DomainName, EvaluateAnswerInput, Round, SuggestOption } from "@/lib/types";
 
 interface QuestionRoundProps {
   round: Round;
@@ -23,6 +23,8 @@ interface QuestionRoundProps {
   onRegenerate: () => void;
   isLoading: boolean;
   isRegenerating: boolean;
+  projectId?: string;
+  domainName?: DomainName;
 }
 
 function buildInitialAnswers(round: Round): Record<string, string> {
@@ -75,16 +77,34 @@ function areAllQuestionsAnswered(
   });
 }
 
+function buildNumberedQuestionList(questions: Round["questions"]): string {
+  return questions
+    .map(function formatQuestion(question, index) {
+      return `${index + 1}. ${question.text}`;
+    })
+    .join("\n");
+}
+
 export function QuestionRound({
   round,
   onSubmit,
   onRegenerate,
   isLoading,
   isRegenerating,
+  projectId,
+  domainName,
 }: QuestionRoundProps) {
   const [answers, setAnswers] = useState(buildInitialAnswersForRound);
   const [naChecked, setNaChecked] = useState(buildInitialNaStateForRound);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [optionsQuestionId, setOptionsQuestionId] = useState<string | null>(
+    null
+  );
+  const [suggestedOptions, setSuggestedOptions] = useState<SuggestOption[]>(
+    []
+  );
+  const [isSuggestingOptions, setIsSuggestingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   function buildInitialAnswersForRound() {
     return buildInitialAnswers(round);
@@ -97,6 +117,9 @@ export function QuestionRound({
   function syncRoundStateFromProps() {
     setAnswers(buildInitialAnswers(round));
     setNaChecked(buildInitialNaState(round));
+    setOptionsQuestionId(null);
+    setSuggestedOptions([]);
+    setOptionsError(null);
   }
 
   useEffect(syncRoundStateFromProps, [round.id]);
@@ -110,6 +133,11 @@ export function QuestionRound({
     }
 
     setAnswers(applyAnswerUpdate);
+
+    if (value.trim()) {
+      setOptionsQuestionId(null);
+      setSuggestedOptions([]);
+    }
   }
 
   function handleNaChange(questionId: string, checked: boolean) {
@@ -131,6 +159,8 @@ export function QuestionRound({
       }
 
       setAnswers(applyNaAnswerUpdate);
+      setOptionsQuestionId(null);
+      setSuggestedOptions([]);
       return;
     }
 
@@ -142,6 +172,67 @@ export function QuestionRound({
     }
 
     setAnswers(clearNaAnswer);
+  }
+
+  function handleCopyQuestion(text: string) {
+    void navigator.clipboard.writeText(text);
+  }
+
+  async function handleCopyAllQuestions() {
+    const numberedList = buildNumberedQuestionList(round.questions);
+    await navigator.clipboard.writeText(numberedList);
+  }
+
+  async function handleRequestOptions(questionId: string, questionText: string) {
+    if (!projectId || !domainName) {
+      return;
+    }
+
+    setOptionsQuestionId(questionId);
+    setSuggestedOptions([]);
+    setOptionsError(null);
+    setIsSuggestingOptions(true);
+
+    try {
+      const response = await fetch("/api/rounds/suggest-options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          domain_name: domainName,
+          question_text: questionText,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        options?: SuggestOption[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setOptionsError(data.error ?? "Failed to load options");
+        return;
+      }
+
+      setSuggestedOptions(data.options ?? []);
+    } catch {
+      setOptionsError("Failed to load options");
+    } finally {
+      setIsSuggestingOptions(false);
+    }
+  }
+
+  function handleUseOption(questionId: string, description: string) {
+    function applyOptionAnswer(previous: Record<string, string>) {
+      return {
+        ...previous,
+        [questionId]: description,
+      };
+    }
+
+    setAnswers(applyOptionAnswer);
+    setOptionsQuestionId(null);
+    setSuggestedOptions([]);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -177,6 +268,7 @@ export function QuestionRound({
   const submitDisabled =
     isLoading || !areAllQuestionsAnswered(round, answers, naChecked);
   const showRegenerateButton = round.status === "pending";
+  const canSuggestOptions = Boolean(projectId && domainName);
 
   function renderQuestion(question: Round["questions"][number]) {
     return (
@@ -184,10 +276,22 @@ export function QuestionRound({
         answer={answers[question.id] ?? ""}
         isLoading={isLoading}
         isNa={naChecked[question.id] ?? false}
+        isSuggestingOptions={
+          isSuggestingOptions && optionsQuestionId === question.id
+        }
         key={question.id}
         onAnswerChange={handleAnswerChange}
+        onCopyQuestion={handleCopyQuestion}
         onNaChange={handleNaChange}
+        onRequestOptions={handleRequestOptions}
+        onUseOption={handleUseOption}
         question={question}
+        showSuggestOptions={
+          canSuggestOptions && optionsQuestionId === question.id
+        }
+        suggestedOptions={
+          optionsQuestionId === question.id ? suggestedOptions : []
+        }
       />
     );
   }
@@ -195,6 +299,21 @@ export function QuestionRound({
   return (
     <>
       <form className="space-y-6" onSubmit={handleSubmit}>
+        {round.questions.length > 0 ? (
+          <div className="flex justify-end">
+            <Button
+              onClick={handleCopyAllQuestions}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Copy all questions
+            </Button>
+          </div>
+        ) : null}
+        {optionsError ? (
+          <p className="text-sm text-destructive">{optionsError}</p>
+        ) : null}
         {round.questions.map(renderQuestion)}
         <div className="flex flex-wrap gap-3">
           <Button disabled={submitDisabled} type="submit">

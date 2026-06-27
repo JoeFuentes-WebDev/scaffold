@@ -27,12 +27,15 @@ import {
   buildEvaluateAnswersPrompt,
   buildEvaluateAnswersSystemPrompt,
 } from "@/lib/prompts/evaluateAnswers";
+import { buildProjectModelUserMessage } from "@/lib/prompts/projectModel";
+import { assembleProjectModel } from "@/lib/services/projectModelService";
 import type {
   ClaudeEvaluateResponse,
   EvaluateAnswerInput,
   EvaluateResult,
   Round,
   RoundQuestion,
+  SuggestOption,
 } from "@/lib/types";
 
 import {
@@ -324,4 +327,62 @@ export async function createClarificationRound(
   }
 
   return round;
+}
+
+export async function generateClarificationAck(
+  _supabase: SupabaseClient,
+  _projectId: string,
+  _domainName: string,
+  clarificationText: string
+): Promise<string> {
+  const systemPrompt =
+    "You confirm clarifications in one sentence. Be specific, not generic.";
+  const userPrompt = `In one sentence, confirm what you understood from this clarification. Be specific, not generic.
+
+Clarification: ${clarificationText}`;
+
+  try {
+    const rawResponse = await callClaude(systemPrompt, userPrompt);
+    return rawResponse.trim();
+  } catch (error) {
+    console.error("Claude clarify-ack error:", error);
+    throw new Error("Failed to generate acknowledgment. Please try again.");
+  }
+}
+
+interface SuggestOptionsResponse {
+  options: SuggestOption[];
+}
+
+export async function suggestAnswerOptions(
+  supabase: SupabaseClient,
+  projectId: string,
+  domainName: string,
+  questionText: string
+): Promise<SuggestOption[]> {
+  const projectModel = await assembleProjectModel(supabase, projectId);
+  const systemPrompt =
+    "You suggest concrete answer options for project questionnaire questions. Return only valid JSON.";
+  const userPrompt = `${buildProjectModelUserMessage(projectModel)}
+
+Domain: ${domainName}
+Question: ${questionText}
+
+Given this project context, suggest 2-3 concrete options for answering this question. For each option, give a one-line tradeoff. Return only JSON: { "options": [{ "label": string, "description": string, "tradeoff": string }] }`;
+
+  let rawResponse: string;
+  try {
+    rawResponse = await callClaude(systemPrompt, userPrompt);
+  } catch (error) {
+    console.error("Claude suggest-options error:", error);
+    throw new Error("Failed to suggest options. Please try again.");
+  }
+
+  try {
+    const parsed = parseClaudeJson<SuggestOptionsResponse>(rawResponse);
+    return parsed.options ?? [];
+  } catch (error) {
+    console.error("Claude suggest-options malformed JSON:", rawResponse);
+    throw new Error("Failed to suggest options. Please try again.");
+  }
 }

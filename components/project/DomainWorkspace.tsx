@@ -57,6 +57,8 @@ export function DomainWorkspace({
   const [clarificationText, setClarificationText] = useState("");
   const [isSubmittingClarification, setIsSubmittingClarification] =
     useState(false);
+  const [clarificationAcknowledgment, setClarificationAcknowledgment] =
+    useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const domainLabel = getDomainLabel(domain);
@@ -98,6 +100,22 @@ export function DomainWorkspace({
   }
 
   useEffect(syncDomainRounds, [domain.id, domain.status, projectId]);
+
+  function dismissClarificationAcknowledgment() {
+    setClarificationAcknowledgment(null);
+  }
+
+  useEffect(function autoDismissClarificationAcknowledgment() {
+    if (!clarificationAcknowledgment) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(dismissClarificationAcknowledgment, 4000);
+
+    return function cleanupClarificationAcknowledgmentTimer() {
+      window.clearTimeout(timer);
+    };
+  }, [clarificationAcknowledgment]);
 
   async function handleStart() {
     setError(null);
@@ -321,10 +339,35 @@ export function DomainWorkspace({
         return;
       }
 
+      const trimmedClarification = clarificationText.trim();
       setShowClarifyForm(false);
       setClarificationText("");
       await loadRounds();
       onRefresh();
+
+      try {
+        const ackResponse = await fetch("/api/rounds/clarify-ack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            domain_name: domain.name,
+            clarification_text: trimmedClarification,
+          }),
+        });
+
+        if (ackResponse.ok) {
+          const ackData = (await ackResponse.json()) as {
+            acknowledgment?: string;
+          };
+
+          if (ackData.acknowledgment) {
+            setClarificationAcknowledgment(ackData.acknowledgment);
+          }
+        }
+      } catch {
+        // Fail silently — clarification already saved.
+      }
     } catch {
       setError("Failed to save clarification");
     } finally {
@@ -364,10 +407,12 @@ export function DomainWorkspace({
 
         {activeRound ? (
           <QuestionRound
+            domainName={domain.name}
             isLoading={isEvaluating}
             isRegenerating={isRegenerating}
             onRegenerate={handleRegenerateRound}
             onSubmit={handleSubmitAnswers}
+            projectId={projectId}
             round={activeRound}
           />
         ) : (
@@ -395,6 +440,22 @@ export function DomainWorkspace({
           <p className="text-sm text-[#6B7280]">No answered rounds yet.</p>
         )}
       </div>
+    );
+  }
+
+  function renderClarificationAcknowledgment() {
+    if (!clarificationAcknowledgment) {
+      return null;
+    }
+
+    return (
+      <button
+        className="w-full rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-left text-sm text-[#374151]"
+        onClick={dismissClarificationAcknowledgment}
+        type="button"
+      >
+        Got it — {clarificationAcknowledgment}
+      </button>
     );
   }
 
@@ -475,6 +536,7 @@ export function DomainWorkspace({
       ) : null}
 
       {renderClarifySection()}
+      {renderClarificationAcknowledgment()}
     </div>
   );
 }

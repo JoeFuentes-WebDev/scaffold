@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const CLAUDE_MODEL = "claude-sonnet-4-6";
-// update model to 4.6
+import { DEFAULT_MODEL } from "@/lib/config/models";
+
 function getAnthropicClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -26,12 +26,13 @@ export function parseClaudeJson<T>(rawText: string): T {
 
 export async function callClaude(
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  model: string = DEFAULT_MODEL
 ): Promise<string> {
   const anthropic = getAnthropicClient();
 
   const message = await anthropic.messages.create({
-    model: CLAUDE_MODEL,
+    model,
     max_tokens: 8192,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
@@ -49,13 +50,14 @@ export async function callClaude(
 export async function streamClaude(
   systemPrompt: string,
   userPrompt: string,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  model: string = DEFAULT_MODEL
 ): Promise<{ text: string; completed: boolean }> {
   const anthropic = getAnthropicClient();
   let fullText = "";
 
   const messageStream = anthropic.messages.stream({
-    model: CLAUDE_MODEL,
+    model,
     max_tokens: 8192,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],

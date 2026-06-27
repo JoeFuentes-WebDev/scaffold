@@ -9,6 +9,7 @@ import {
   type ReviewGateResult,
 } from "@/components/artifacts/ReviewGate";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   ARTIFACT_DEFINITIONS,
   getArtifactFilename,
@@ -17,6 +18,7 @@ import type {
   Artifact,
   ArtifactsWorkspaceUi,
   ArtifactType,
+  ParsedReview,
 } from "@/lib/types";
 
 interface DocumentsWorkspaceProps {
@@ -101,6 +103,25 @@ function hasGeneratedContent(artifact: Artifact | null): boolean {
   return artifact.status === "generated" || artifact.status === "partial";
 }
 
+function isReviewExpandable(artifact: Artifact | null): boolean {
+  if (!artifact?.content) {
+    return false;
+  }
+
+  return artifact.status === "uploaded" || artifact.status === "processed";
+}
+
+function getReviewTemplateLabel(
+  artifact: Artifact | null,
+  milestoneDisplayName: string
+): string | undefined {
+  if (!artifact || artifact.status !== "template_generated") {
+    return undefined;
+  }
+
+  return `Template — give to Cursor to complete after ${milestoneDisplayName}`;
+}
+
 export function DocumentsWorkspace({
   projectId,
   refreshKey,
@@ -115,6 +136,18 @@ export function DocumentsWorkspace({
   );
   const [streamingContent, setStreamingContent] = useState("");
   const [showReviewGate, setShowReviewGate] = useState(false);
+  const [showProgressionUpload, setShowProgressionUpload] = useState(false);
+  const [progressionUploadComplete, setProgressionUploadComplete] =
+    useState(false);
+  const [progressionSkippedReview, setProgressionSkippedReview] =
+    useState(false);
+  const [progressionParsedReview, setProgressionParsedReview] =
+    useState<ParsedReview | null>(null);
+  const [progressionParseError, setProgressionParseError] = useState<
+    string | null
+  >(null);
+  const [isParsingProgressionReview, setIsParsingProgressionReview] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
@@ -168,6 +201,15 @@ export function DocumentsWorkspace({
     }
 
     setExpandedType(artifactType);
+  }
+
+  function resetProgressionState() {
+    setShowProgressionUpload(false);
+    setProgressionUploadComplete(false);
+    setProgressionSkippedReview(false);
+    setProgressionParsedReview(null);
+    setProgressionParseError(null);
+    setShowReviewGate(false);
   }
 
   async function handleGenerate(
@@ -237,6 +279,7 @@ export function DocumentsWorkspace({
         setStreamingContent(content);
       }
 
+      resetProgressionState();
       await loadArtifacts();
     } catch {
       setError("Failed to generate artifact");
@@ -246,7 +289,6 @@ export function DocumentsWorkspace({
   }
 
   function handleDownload(artifactType: ArtifactType) {
-    const artifact = getArtifactForType(artifacts, artifactType);
     const naming = getRowNaming(artifactType);
     const content = getPreviewContent(artifactType);
 
@@ -290,7 +332,75 @@ export function DocumentsWorkspace({
     }
   }
 
-  function handleStartReviewGate() {
+  function handleContinueToNextMilestone() {
+    setShowProgressionUpload(true);
+    setProgressionUploadComplete(false);
+    setProgressionSkippedReview(false);
+    setProgressionParsedReview(null);
+    setProgressionParseError(null);
+    setExpandedType("milestone");
+  }
+
+  async function parseProgressionReview(content: string) {
+    setProgressionParseError(null);
+    setIsParsingProgressionReview(true);
+
+    try {
+      const response = await fetch("/api/review/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          content,
+        }),
+      });
+
+      const data = (await response.json()) as ParsedReview & { error?: string };
+
+      if (!response.ok) {
+        setProgressionParseError(data.error ?? "Failed to parse review file");
+        return;
+      }
+
+      setProgressionParsedReview(data);
+      setProgressionSkippedReview(false);
+      setProgressionUploadComplete(true);
+      await loadArtifacts();
+    } catch {
+      setProgressionParseError("Failed to parse review file");
+    } finally {
+      setIsParsingProgressionReview(false);
+    }
+  }
+
+  function handleProgressionFileUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file || !file.name.endsWith(".md")) {
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function handleProgressionReaderLoad(
+      loadEvent: ProgressEvent<FileReader>
+    ) {
+      const content = String(loadEvent.target?.result ?? "");
+      void parseProgressionReview(content);
+    };
+
+    reader.readAsText(file);
+  }
+
+  function handleSkipProgressionUpload() {
+    setProgressionSkippedReview(true);
+    setProgressionParsedReview(null);
+    setProgressionUploadComplete(true);
+  }
+
+  function handleStartReviewGateFromProgression() {
     setShowReviewGate(true);
     setExpandedType("milestone");
   }
@@ -327,6 +437,9 @@ export function DocumentsWorkspace({
 
     return (
       <ReviewGate
+        hideUploadStep
+        initialParsedReview={progressionParsedReview}
+        initialSkippedReview={progressionSkippedReview}
         nextMilestoneLabel={workspaceUi.nextMilestoneDisplayName}
         onCancel={handleCancelReviewGate}
         onComplete={handleReviewGateComplete}
@@ -336,25 +449,104 @@ export function DocumentsWorkspace({
     );
   }
 
-  function renderNextMilestoneButton() {
+  function renderProgressionUploadSection() {
+    if (!showProgressionUpload || progressionUploadComplete) {
+      return null;
+    }
+
+    const reviewFilename = getArtifactFilename(
+      "review",
+      workspaceUi.milestoneSequenceNumber
+    );
+
+    return (
+      <div className="space-y-3 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-4">
+        <p className="text-sm font-medium text-[#111827]">
+          Upload completed {reviewFilename}
+        </p>
+        <div>
+          <Label htmlFor="progression-review-upload">Choose File</Label>
+          <input
+            accept=".md,text/markdown"
+            className="mt-2 block w-full text-sm text-[#6B7280]"
+            disabled={isParsingProgressionReview}
+            id="progression-review-upload"
+            onChange={handleProgressionFileUpload}
+            type="file"
+          />
+        </div>
+        {progressionParseError ? (
+          <p className="text-sm text-destructive">{progressionParseError}</p>
+        ) : null}
+        <Button
+          disabled={isParsingProgressionReview}
+          onClick={handleSkipProgressionUpload}
+          type="button"
+          variant="outline"
+        >
+          Skip (generate without review)
+        </Button>
+      </div>
+    );
+  }
+
+  function renderContinueButton() {
     if (!workspaceUi.canStartReviewGate) {
       return null;
     }
 
-    if (!workspaceUi.artifactThresholds.milestone.isReady) {
+    if (showProgressionUpload || showReviewGate) {
       return null;
     }
 
     return (
       <Button
-        disabled={generatingType === "milestone" || showReviewGate}
-        onClick={handleStartReviewGate}
+        disabled={generatingType === "milestone"}
+        onClick={handleContinueToNextMilestone}
         size="sm"
         type="button"
         variant="secondary"
       >
-        Generate {workspaceUi.nextMilestoneDisplayName}
+        Continue to {workspaceUi.nextMilestoneDisplayName}
       </Button>
+    );
+  }
+
+  function renderGenerateNextMilestoneButton() {
+    if (!progressionUploadComplete || showReviewGate) {
+      return null;
+    }
+
+    return (
+      <div className="space-y-2">
+        {progressionSkippedReview ? (
+          <p className="text-sm text-amber-600">
+            Generating without a completed review. Open questions may be missed.
+          </p>
+        ) : null}
+        <Button
+          disabled={generatingType === "milestone"}
+          onClick={handleStartReviewGateFromProgression}
+          size="sm"
+          type="button"
+        >
+          Generate {workspaceUi.nextMilestoneDisplayName}
+        </Button>
+      </div>
+    );
+  }
+
+  function renderMilestoneProgression() {
+    if (!workspaceUi.canStartReviewGate) {
+      return null;
+    }
+
+    return (
+      <div className="space-y-3">
+        {renderContinueButton()}
+        {renderProgressionUploadSection()}
+        {renderGenerateNextMilestoneButton()}
+      </div>
     );
   }
 
@@ -364,10 +556,19 @@ export function DocumentsWorkspace({
     const naming = getRowNaming(artifactType);
     const threshold = workspaceUi.artifactThresholds[artifactType];
     const generated = hasGeneratedContent(artifact);
+    const milestoneNaming = getRowNaming("milestone");
+    const isReview = artifactType === "review";
     const generateLabel =
       artifactType === "milestone" && !generated
         ? `Generate ${naming.displayName}`
         : "Generate";
+    const secondaryLabel = isReview
+      ? getReviewTemplateLabel(artifact, milestoneNaming.displayName)
+      : undefined;
+    const isExpandable = isReview
+      ? isReviewExpandable(artifact)
+      : generated || generatingType === artifactType;
+    const showGenerateButton = !isReview;
 
     function handleRowDownload() {
       handleDownload(artifactType);
@@ -395,6 +596,7 @@ export function DocumentsWorkspace({
           }
           generateLabel={generateLabel}
           hasGeneratedContent={generated}
+          isExpandable={isExpandable}
           isExpanded={expandedType === artifactType}
           isGenerating={generatingType === artifactType}
           isPartial={artifact?.status === "partial"}
@@ -406,10 +608,10 @@ export function DocumentsWorkspace({
           onRegenerate={handleRowRegenerate}
           onToggleExpand={handleRowToggleExpand}
           previewContent={getPreviewContent(artifactType)}
+          secondaryLabel={secondaryLabel}
+          showGenerateButton={showGenerateButton}
         />
-        {artifactType === "milestone" ? (
-          <div className="flex justify-end">{renderNextMilestoneButton()}</div>
-        ) : null}
+        {artifactType === "milestone" ? renderMilestoneProgression() : null}
       </div>
     );
   }

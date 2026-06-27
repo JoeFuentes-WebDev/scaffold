@@ -14,15 +14,18 @@ import {
 interface ArtifactRowProps {
   displayName: string;
   description: string;
+  secondaryLabel?: string;
   isReady: boolean;
   missingLabel: string;
   hasGeneratedContent: boolean;
+  isExpandable: boolean;
   isExpanded: boolean;
   isGenerating: boolean;
   previewContent: string;
   isPartial: boolean;
   isStreaming: boolean;
   generateLabel: string;
+  showGenerateButton: boolean;
   onToggleExpand: () => void;
   onGenerate: () => void;
   onRegenerate: () => void;
@@ -33,15 +36,18 @@ interface ArtifactRowProps {
 export function ArtifactRow({
   displayName,
   description,
+  secondaryLabel,
   isReady,
   missingLabel,
   hasGeneratedContent,
+  isExpandable,
   isExpanded,
   isGenerating,
   previewContent,
   isPartial,
   isStreaming,
   generateLabel,
+  showGenerateButton,
   onToggleExpand,
   onGenerate,
   onRegenerate,
@@ -49,7 +55,7 @@ export function ArtifactRow({
   gateContent,
 }: ArtifactRowProps) {
   function handleRowClick() {
-    if (hasGeneratedContent || isStreaming) {
+    if (isExpandable) {
       onToggleExpand();
     }
   }
@@ -70,6 +76,10 @@ export function ArtifactRow({
   }
 
   function renderPrimaryButton() {
+    if (!showGenerateButton) {
+      return null;
+    }
+
     if (hasGeneratedContent) {
       return (
         <Button
@@ -114,7 +124,7 @@ export function ArtifactRow({
   return (
     <div className="overflow-hidden rounded-md border border-[#E5E7EB] bg-white">
       <div
-        className={`flex items-center justify-between gap-4 px-4 py-3 ${hasGeneratedContent || isStreaming ? "cursor-pointer hover:bg-[#F9FAFB]" : ""}`}
+        className={`flex items-center justify-between gap-4 px-4 py-3 ${isExpandable ? "cursor-pointer hover:bg-[#F9FAFB]" : ""}`}
         onClick={handleRowClick}
       >
         <div className="min-w-0 flex-1">
@@ -126,6 +136,11 @@ export function ArtifactRow({
               {isReady ? "Ready" : "Not ready"}
             </Badge>
           </div>
+          {secondaryLabel ? (
+            <p className="mt-1 truncate text-xs text-[#374151]">
+              {secondaryLabel}
+            </p>
+          ) : null}
           <p className="mt-1 truncate text-xs text-[#6B7280]">{description}</p>
         </div>
 
@@ -140,7 +155,7 @@ export function ArtifactRow({
           >
             Download
           </Button>
-          {hasGeneratedContent || isStreaming ? (
+          {isExpandable ? (
             <ChevronDownIcon
               className={`size-4 text-[#6B7280] transition-transform ${isExpanded ? "rotate-180" : ""}`}
             />

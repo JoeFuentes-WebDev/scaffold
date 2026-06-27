@@ -116,6 +116,18 @@ export const CompleteReviewSchema = z.object({
   project_id: z.string().uuid(),
 });
 
+export const ClarifyAckSchema = z.object({
+  project_id: z.string().uuid(),
+  domain_name: DomainNameSchema,
+  clarification_text: z.string().trim().min(1, "clarification_text is required"),
+});
+
+export const SuggestOptionsSchema = z.object({
+  project_id: z.string().uuid(),
+  domain_name: DomainNameSchema,
+  question_text: z.string().trim().min(1, "question_text is required"),
+});
+
 export function invalidRequestResponse(error: z.ZodError) {
   return NextResponse.json(
     { error: "Invalid request", details: error.flatten() },

@@ -42,6 +42,33 @@ describe("parseReviewMarkdown", () => {
     expect(result.openQuestions).toHaveLength(0);
   });
 
+  it("extracts open questions from numbered list section headers", () => {
+    const markdown = `
+### 5. Open Questions
+
+1. Should we use Zod or Yup? — Impact: validation library choice affects all forms
+2. What Node version? — Impact: deployment compatibility
+`;
+
+    const result = parseReviewMarkdown(markdown);
+
+    expect(result.openQuestions).toHaveLength(2);
+    expect(result.openQuestions[0]).toContain("Zod or Yup");
+  });
+
+  it("extracts manual steps from numbered list section headers", () => {
+    const markdown = `
+### 6. Manual Steps Required
+
+1. Run npx supabase db push — Why: apply pending migrations
+`;
+
+    const result = parseReviewMarkdown(markdown);
+
+    expect(result.manualSteps).toHaveLength(1);
+    expect(result.manualSteps[0]).toContain("supabase db push");
+  });
+
   it("returns empty arrays when Open Questions section is missing", () => {
     const markdown = `# REVIEW_01\n\nNo questions section here.`;
 

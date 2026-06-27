@@ -10,7 +10,8 @@ import {
   getReviewNamingForMilestone,
   hasGeneratedMilestone,
 } from "@/lib/services/artifactNaming";
-import { streamClaude } from "@/lib/claude/client";
+import { getModelForArtifact } from "@/lib/config/models";
+import { callClaude, streamClaude } from "@/lib/claude/client";
 import { getArtifactByType, getArtifactsForProject, updateArtifactStatus, upsertArtifact } from "@/lib/data/artifacts";
 import { getDomainsForProject } from "@/lib/data/domains";
 import {
@@ -60,6 +61,7 @@ export interface StreamArtifactResult {
   content: string;
   artifact: Artifact;
   isPartial: boolean;
+  reviewArtifact?: Artifact;
 }
 
 function resolveMilestoneSequenceNumber(
@@ -245,6 +247,33 @@ export async function markReviewProcessed(
   return updateArtifactStatus(supabase, projectId, "review", "processed");
 }
 
+async function generateReviewTemplate(
+  supabase: SupabaseClient,
+  projectId: string,
+  sequenceNumber: number
+): Promise<Artifact> {
+  const prompts = await buildPromptsForArtifact(
+    supabase,
+    projectId,
+    "review",
+    sequenceNumber
+  );
+  const model = getModelForArtifact("review");
+  const content = await callClaude(
+    prompts.systemPrompt,
+    prompts.userPrompt,
+    model
+  );
+
+  return upsertArtifact(supabase, {
+    project_id: projectId,
+    artifact_type: "review",
+    content,
+    status: "template_generated",
+    sequence_number: sequenceNumber,
+  });
+}
+
 export function buildArtifactsWorkspaceUi(
   artifacts: Artifact[],
   domains: Domain[]
@@ -367,10 +396,12 @@ export async function streamArtifactGeneration(
   let isPartial = false;
 
   try {
+    const model = getModelForArtifact(artifactType);
     const streamResult = await streamClaude(
       prompts.systemPrompt,
       prompts.userPrompt,
-      onChunk
+      onChunk,
+      model
     );
 
     content = streamResult.text;
@@ -402,5 +433,15 @@ export async function streamArtifactGeneration(
     sequence_number: sequenceNumber,
   });
 
-  return { content, artifact, isPartial };
+  let reviewArtifact: Artifact | undefined;
+
+  if (artifactType === "milestone" && !isPartial) {
+    reviewArtifact = await generateReviewTemplate(
+      supabase,
+      projectId,
+      sequenceNumber
+    );
+  }
+
+  return { content, artifact, isPartial, reviewArtifact };
 }

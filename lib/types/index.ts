@@ -71,6 +71,12 @@ export interface ParsedReview {
   manualSteps: string[];
 }
 
+export interface SuggestOption {
+  label: string;
+  description: string;
+  tradeoff: string;
+}
+
 export interface StreamArtifactOptions {
   regenerate?: boolean;
   nextMilestone?: boolean;
